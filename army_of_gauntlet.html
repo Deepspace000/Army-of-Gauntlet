@@ -364,7 +364,7 @@
     <div class="tsub">twenty-five champions. one dungeon. no way back.</div>
     <canvas id="titleRow" width="380" height="26"></canvas>
     <div class="tscore"><span id="tlast"></span>High Score <b id="thi">021270</b></div>
-    <div class="tprompt">PRESS ENTER</div>
+    <div class="tprompt">PRESS ANY KEY</div>
     <div class="tsub" style="margin-top:10px">S &nbsp;sprite sheet</div>
   </div>
 
@@ -433,6 +433,7 @@ const PLAYER_SPEED = 1.7 * SPEED_SCALE;
 const ENEMY_SPEED  = PLAYER_SPEED * 0.9;
 const SHOT_SPEED   = 5.2 * SPEED_SCALE;
 const ELIXIR_MAX   = 5;        /* health draughts you can carry at once */
+const HEAL_MAX     = 3;        /* golden draughts you can carry at once */
 const TONIC_MAX    = 3;        /* follower tonics you can carry at once */
 const SCROLL_CHARGES = 5;      /* every scroll comes with five castings */
 /* Scrolls are found in bands: the stronger the magic, the deeper you must go
@@ -1040,6 +1041,425 @@ function makeBeast(p){
   set.left = set.right.map(flipX);
   return set;
 }
+/* ============================ the master body ============================
+   Body space: r = the figure's own right, d = the way it faces, z = up.
+   The camera looks down at the floor from the south at about 60 degrees, so
+   depth (d and r on the floor) is squashed to half and height is not.
+   FACING 0 is south (toward the camera), then clockwise: SW, W, NW, N, NE, E, SE. */
+const HUM=32, HUM_H=16, SHADOW='#0c0c14';
+const FACING_NAMES=['S','SW','W','NW','N','NE','E','SE'];
+const FACING_VEC=[[0,1],[-.7071,.7071],[-1,0],[-.7071,-.7071],[0,-1],[.7071,-.7071],[1,0],[.7071,.7071]];
+
+/* a thick line of solid pixels between two points */
+function line(g,x0,y0,x1,y1,w,c){
+  const n=Math.max(1,Math.ceil(Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2));
+  for(let i=0;i<=n;i++){
+    const t=i/n, x=x0+(x1-x0)*t, y=y0+(y1-y0)*t;
+    if(w<=1) g.px(x,y,c); else g.ell(x,y,w/2,w/2,c);
+  }
+}
+
+function humanoidFrame(f,phase,kit,opt){
+  opt=opt||{};
+  const g=new Grid(HUM,HUM);
+  const d=FACING_VEC[f], r=[-d[1],d[0]];              // right-hand side, on the floor
+  const OX=16, OY=30;                                   // where the feet meet the floor
+  const P=(xr,yd,z)=>[OX + xr*r[0] + yd*d[0], OY + (xr*r[1] + yd*d[1])*0.5 - z];
+  const depth=(xr,yd)=>xr*r[1] + yd*d[1];               // bigger = nearer the camera
+  const parts=[];
+  const add=(dep,fn)=>parts.push({dep,fn});
+  const fx=d[0], fy=d[1]*0.5+0.5;                       // the facing as the camera sees it
+  const profile=Math.abs(d[1])<0.3;
+
+  /* the walk: contact frames have the legs apart, pass frames have them under the body and the body a pixel higher */
+  const K=[[ 3.6,-3.6,0],[0.6,-0.6,1],[-3.6,3.6,0],[-0.6,0.6,1]][phase];
+  const legL=K[0], legR=K[1], bob=K[2];
+  const armL=-legL*0.75, armR=-legR*0.75;               // arms swing against the legs
+
+  const skin=kit.skin, hair=kit.hair, tun=kit.tunic, tro=kit.trousers, boot=kit.boots, steel=kit.steel||'#d8d8e8';
+  const tunD=shade(tun,-34);
+  const head=kit.head||'hair', wpn=kit.weapon||'sword';
+  const bw = kit.slim ? 0.82 : kit.bulk ? 1.16 : kit.female ? 0.88 : 1;   // slim narrows the torso and shoulders, bulk broadens them
+
+  if(opt.shadow!==false){ const s=P(0,0,0); g.ell(s[0],s[1]+0.5,7,3,SHADOW); }
+
+  /* ---- legs: hip to foot, a 3px column, boot at the end */
+  const leg=(xr,swing)=>{
+    const hip=P(xr,0,9+bob), ft=P(xr,swing,0+bob);
+    add(kit.chest==='robe' ? -50 : depth(xr,swing*0.5), g2=>{   // under a robe the legs always go behind the hem
+      line(g2,hip[0],hip[1],ft[0],ft[1]-1,3,tro);
+      g2.ell(ft[0],ft[1]-0.5,2.6,1.6,boot);           // the boot, foreshortened
+      if(swing>1) g2.ell(ft[0]+d[0]*1.5,ft[1]+d[1]*0.75-0.5,1.8,1.2,shade(boot,20));   // toe cap forward
+    });
+  };
+  if(!kit.wraith){ leg(-3,legL); leg(3,legR); }         // a wraith has no legs: its robe goes to the floor
+
+  /* ---- torso: a rounded block, shoulders wider than the waist, belt at the hip */
+  add(0, g2=>{
+    for(let z=9;z<=16;z++){ const c=P(0,0,z+bob); const w=(5.2+ (z-9)*0.22)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+    const sh=P(0,0,16.5+bob); g2.ell(sh[0],sh[1],6.6*bw,3.4*bw,tun);   // shoulder cap seen from above
+    const bt=P(0,0,9+bob); g2.ell(bt[0],bt[1],5.3*bw,2.9*bw,tunD);      // belt
+    const bk=P(0,-3.2,13+bob); g2.ell(bk[0],bk[1],4.2,2.6,tunD);  // the back of the tunic is in shade
+    if(kit.chest==='plate'){ const pl=P(0,2.2,13.5+bob); g2.ell(pl[0],pl[1],4.4,3.4,steel); }
+    if(kit.chest==='robe'&&!kit.wraith){ for(let z=1;z<=9;z++){ const c=P(0,0,z+bob); const w=(5.2+(9-z)*0.28)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+                            const hm=P(0,0,1+bob); g2.ell(hm[0],hm[1],7.7*bw,4.2*bw,tunD); }
+    if(kit.wraith){          // a ghost's robe narrows to a wisp at the floor, as if risen out of the ground
+      const rip=[0,1,0,-1][phase];
+      for(let z=9;z>=1;z--){ const t=(9-z)/8; const c=P(rip*t*1.2,-t*0.8,z+bob); const w=(5.2-t*3.4)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+      for(const k of [-1,0,1]){ const q=P(k*1.4+rip*1.2,-1,0.3+bob); g2.ell(q[0],q[1]-(k?0:1),0.9,1.2,shade(tun,-14)); }   // three torn tips
+    }
+  });
+  if(kit.cape){                                       // a cape: hung from the shoulders, flaring and trailing behind, swaying with the stride.
+    add(depth(0,-4), g2=>{                            // its own part: behind everything facing south, over the back and legs facing north
+      const sway=[1.2,0,-1.2,0][phase], capeD=shade(kit.cape,-30);
+      const shoulders=P(0,-1.2,16+bob); g2.ell(shoulders[0],shoulders[1],6.2*bw,2.6,kit.cape);   // the collar across the shoulders
+      for(let z=15;z>=1;z--){ const t=(15-z)/14; const c=P(sway*t*1.3,-3.2-t*2.2,z+bob); const w=(4.2+t*2.6)*bw; g2.ell(c[0],c[1],w,w*0.5,t>0.8?capeD:kit.cape); }
+    });
+  }
+
+  /* ---- arms: from the shoulder, hanging to hip height, swinging; the right hand holds the weapon */
+  const arm=(xr,swing,right)=>{
+    if(kit.wraith){ swing=5.5+swing*0.4; }               // both hands out in front, grasping
+    const sh=P(xr,0,15.5+bob), hd=P(xr+0.6*Math.sign(xr),swing,kit.wraith?12+bob:8.5+bob);
+    add(depth(xr,swing*0.6), g2=>{
+      line(g2,sh[0],sh[1],hd[0],hd[1],3,tun);                       // sleeve
+      const handC=kit.hands||skin;
+      if(kit.wraith){                                                 // seeking hands: broad, fingers spread toward you
+        g2.ell(hd[0],hd[1],2.5,2,handC);
+        for(const k of [-1.2,0,1.2]){ const f=P(xr+0.6*Math.sign(xr)+k,swing+2.4,(kit.wraith?12:8.5)+bob); g2.ell(f[0],f[1],0.8,0.8,handC); }
+      } else g2.ell(hd[0],hd[1],1.9,1.6,handC);                       // hand
+      const hx=xr+0.6*Math.sign(xr);
+      if(right) weaponAt(g2,wpn,hx,swing,8.5+bob);
+      else if(kit.offhand) offhandAt(g2,kit.offhand,hx,swing,8.5+bob);
+    });
+  };
+  /* weapons are body-space too: they are what proves the facing */
+  const weaponAt=(g2,w,hx,hy,hz)=>{
+    const H=P(hx,hy,hz);
+    const stick=(len,zr,col,wd)=>{ const t=P(hx,hy+len,hz+zr); line(g2,H[0],H[1]-0.5,t[0],t[1],wd||2,col); return t; };
+    const pole=(len,col)=>{ const t=P(hx,hy+1.5,hz+len); line(g2,H[0],H[1],t[0],t[1],2,col); return t; };
+    if(w==='sword'){ stick(10,1,steel); const gd=P(hx,hy+2,hz+1); g2.ell(gd[0],gd[1],1.8,1.4,shade(steel,-60)); }
+    if(w==='dagger'){ stick(5,0.5,steel); }
+    if(w==='axe'){ const t=stick(8,1.5,shade(boot,10)); g2.ell(t[0],t[1],3,2.4,steel); const e=P(hx,hy+8,hz+3.5); g2.ell(e[0],e[1],2.2,1.6,steel); }
+    if(w==='mace'){ const t=stick(7,1,shade(boot,10)); g2.ell(t[0],t[1],2.6,2.4,steel); }
+    if(w==='spear'){ const t=pole(19,shade(boot,10)); g2.ell(t[0],t[1]-1,1.4,2.2,steel); }
+    if(w==='staff'){ const t=pole(20,shade(boot,-10)); g2.ell(t[0],t[1]-1,2.2,2.2,kit.gem||'#9ad8ff'); }
+    if(w==='bow'){ const top=P(hx,hy,hz+9), bot=P(hx,hy,hz-6), mid=P(hx,hy+3.2,hz+1.5);   // upright: straight string between the tips,
+                   line(g2,top[0],top[1],bot[0],bot[1],1,C.bone);                            // the stave bowing forward toward the target
+                   line(g2,top[0],top[1],mid[0],mid[1],2,shade(boot,20)); line(g2,mid[0],mid[1],bot[0],bot[1],2,shade(boot,20)); }
+    if(w==='wand'){ stick(6,2,shade(boot,-10),1); const t=P(hx,hy+6,hz+2); g2.px(t[0],t[1],kit.gem||'#ff6a44'); }
+  };
+  const offhandAt=(g2,o,hx,hy,hz)=>{
+    if(o==='shield'){ const s=P(hx-1.5,hy+1,hz+3); g2.ell(s[0],s[1],3.2,4,kit.shield||steel); const b=P(hx-1.5,hy+1,hz+3); g2.ell(b[0],b[1],1.2,1.4,shade(kit.shield||steel,-50)); }
+    if(o==='book'){ const b=P(hx,hy+1,hz+1); g2.ell(b[0],b[1],2.4,1.8,kit.book||'#6e0f06'); }
+    if(o==='torch'){ const t=P(hx,hy+1,hz+7); line(g2,P(hx,hy,hz)[0],P(hx,hy,hz)[1],t[0],t[1],1,shade(boot,10)); g2.ell(t[0],t[1]-1,1.6,2,'#ff9a2a'); }
+  };
+  arm(-7*bw,armL,false); arm(7*bw,armR,true);
+
+  /* ---- long hair, for the women: a fall down the back from crown to shoulder blades,
+          its own part so it hides behind the head from the south and drapes over the
+          shoulders from the north, showing either side of the neck in between */
+  if(kit.female && head!=='fullhelm' && !(head==='hood'||head==='skullhood')){
+    add(depth(0,-2.4), g2=>{
+      for(let z=20;z>=12;z-=1){ const p=P(0,-2.4-(20-z)*0.12,z+bob); const w=2.2+(20-z)*0.16; g2.ell(p[0],p[1],w,w*0.7,hair); }
+      const t=P(0,-3.2,12+bob); g2.ell(t[0],t[1],2.6,1.4,shade(hair,-25));   // the ends, in shadow
+    });
+  }
+  /* ---- head: a ball with hair or headgear over its back half, eyes on the front */
+  add(0.01, g2=>{
+    const nk=P(0,0,17.2+bob); g2.ell(nk[0],nk[1],2.2,1.4,shade(skin,-22));   // a neck between collar and jaw
+    const h=P(0,0,21.5+bob), RX=profile?4.7:5.4, RY=5;
+    const onHead=(x,y)=>{ const nx=(Math.floor(x)+0.5-h[0])/RX, ny=(Math.floor(y)+0.5-h[1])/RY; return nx*nx+ny*ny<=0.9; };
+    const hooded = head==='hood'||head==='skullhood';
+    if(hooded){ g2.ell(h[0],h[1]+0.5,RX+1.3,RY+1.2,shade(kit.cloth||tun,-20)); }           // the cowl, a size up from the skull
+    const bony = head==='skullhood'||head==='skull';
+    g2.ell(h[0],h[1],RX,RY, bony?(kit.bone||C.bone):skin);
+    /* The cap - hair, helmet or hood - is painted onto the skull pixels whose
+       surface faces away from the camera and the facing; the face is the rest.
+       From the south the cap covers the top third, from the north the whole
+       head, in profile the back half and the crown. */
+    const isHelm = head==='helm'||head==='hornhelm'||head==='winghelm'||head==='fullhelm';
+    const helmCol = shade(steel,-22);                                   // helmets a shade darker than the blade
+    const capCol = (head==='hair'||head==='horns')?hair : isHelm?helmCol : hooded?(kit.cloth||tun) : head==='cap'?(kit.cloth||tun) : hair;
+    const capBias = head==='hair'?0.24 : hooded?0.10 : 0.22;
+    const CAP=[];
+    for(let y=Math.floor(h[1]-RY);y<=Math.ceil(h[1]+RY);y++)
+      for(let x=Math.floor(h[0]-RX);x<=Math.ceil(h[0]+RX);x++){
+        const nx=(x+0.5-h[0])/RX, ny=(y+0.5-h[1])/RY;
+        if(nx*nx+ny*ny>1.02) continue;
+        let edge=0.05;
+        if(head==='hair'){ edge += -0.12*fy*Math.abs(Math.cos((x+0.5-h[0])*1.9)) + 0.10*fy*nx;   // a ragged fringe, swept to one side
+                           if(fy>0.5 && Math.abs(nx)>0.76 && ny>-0.35 && ny<0.4){ g2.px(x,y,hair); CAP.push([x,y]); continue; } }  // sideburns
+        if(head==='skull') continue;                                       // bare bone, nothing on it
+        if(head==='fullhelm' || nx*fx+ny*fy+capBias*d[1]<edge){ g2.px(x,y,capCol); CAP.push([x,y]); }   // a full helm covers the whole skull
+      }
+    if(head==='hair'){                                   // tufts poke a pixel past the skull round the crown
+      for(let x=Math.floor(h[0]-RX);x<=Math.ceil(h[0]+RX);x++){
+        const nx=(x+0.5-h[0])/RX; if(Math.abs(nx)>0.92) continue;
+        const top=Math.floor(h[1]-RY*Math.sqrt(1-nx*nx)+0.5);
+        if(((x*7+3)%5)<2 && g2.get(x,top)===hair) g2.px(x,top-1,hair);
+      }
+    }
+    if(head==='helm'||head==='winghelm'){
+      const rim=P(0,0,20.5+bob); for(let a=0;a<Math.PI*2;a+=0.25){ const px=rim[0]+Math.cos(a)*RX*0.98, py=rim[1]+Math.sin(a)*RY*0.98*0.55+1.2; if(py>h[1]-1) g2.px(px,py,shade(steel,-55)); }   // the brow band
+      if(fy>0.55){ const n0=P(0,4.2,22+bob), n1=P(0,4.6,18.5+bob); line(g2,n0[0],n0[1],n1[0],n1[1],1,shade(steel,-40)); }  // nose guard
+    }
+    if(head==='fullhelm'){                                // the whole head in steel, a dark visor slit for a face
+      const slot=shade(steel,-150);
+      const near=depth(0,4.3);                            // how squarely the visor faces the camera
+      if(near>-0.5){
+        const sx = Math.min(2.6, 2.6*Math.max(0.35,(near+0.5)/4.8));   // the slit foreshortens as the head turns
+        const a=P(-sx,4.3,21.4+bob), b=P(sx,4.3,21.4+bob); line(g2,a[0],a[1],b[0],b[1],1,slot);   // eye slit
+        const c=P(0,4.5,20.6+bob), e=P(0,4.7,18.6+bob); line(g2,c[0],c[1],e[0],e[1],1,slot);        // breath slit
+        for(const sgn of [-1,1]){ const q=P(sgn*sx*0.55,4.35,21.4+bob); g2.px(q[0],q[1],'#ff6a44'); }   // eyes glint in the dark
+      }
+      const rim=P(0,0,19.2+bob); for(let a=0;a<Math.PI*2;a+=0.25){ const px=rim[0]+Math.cos(a)*RX*0.98, py=rim[1]+Math.sin(a)*RY*0.98*0.55+1.2; if(py>h[1]) g2.px(px,py,shade(steel,-60)); }   // the jaw rim
+    }
+    if(head==='hornhelm'||head==='horns'||(head==='fullhelm'&&kit.horns)){   // horns: body-space curls from the temples
+      for(const s of [-1,1]){ const a=P(s*5,0.5,22.5+bob), b=P(s*7.5,-0.5,26+bob), c=P(s*7,-1,28.5+bob);
+        line(g2,a[0],a[1],b[0],b[1],2,C.bone); line(g2,b[0],b[1],c[0],c[1],1,C.bone); }
+    }
+    if(head==='winghelm'){                                // valkyrie wings, sweeping back and up
+      for(const s of [-1,1]){ const a=P(s*5,0,23+bob), b=P(s*7,-3,26.5+bob), c=P(s*6,-6,29+bob);
+        line(g2,a[0],a[1],b[0],b[1],2,C.bone); line(g2,b[0],b[1],c[0],c[1],2,C.bone); const t=P(s*7.5,-4.5,25+bob); g2.px(t[0],t[1],C.bone); }
+    }
+    if(head==='wizard'){                                  // a tall cone with a brim, leaning back
+      const brim=P(0,0,23.3+bob); g2.ell(brim[0],brim[1],7.6,3.9,shade(kit.cloth||tun,-30));
+      for(let z=23.5;z<=30.5;z+=0.5){ const t=(z-23.5)/7; const c=P(0,-t*3.2,z+bob); const w=5.2*(1-t)+0.6; g2.ell(c[0],c[1],w,w*0.6,kit.cloth||tun); }
+      const band=P(0,0,24.2+bob); g2.ell(band[0],band[1]+0.3,5.1,2.9,shade(kit.cloth||tun,-45)); const bt=P(0,0,25+bob); g2.ell(bt[0],bt[1],4.6,2.6,kit.cloth||tun);
+    }
+    if(head==='cap'){ const bm=P(0,2.5,23.5+bob); g2.ell(bm[0],bm[1],3.2,1.4,shade(kit.cloth||tun,-30)); }   // a peak forward
+    if(head==='circlet'){                                 // only the near half of the band: the skull hides the rest
+      const rim=P(0,0,23+bob), gold=kit.gold||'#ffd23c';
+      for(let a=0;a<Math.PI*2;a+=0.2){ if(Math.sin(a)<-0.05) continue;
+        g2.px(rim[0]+Math.cos(a)*RX*0.92, rim[1]+Math.sin(a)*RY*0.92*0.55+0.6, Math.cos(a)>0.6?shade(gold,-40):gold); }
+    }
+    if(head==='skullhood'){ const j=P(0,3.5,19+bob); g2.rect(j[0]-2,j[1],4,1,shade(C.bone,-50)); }   // a tooth line
+    /* Eyes, per the reference sheet: two dark, muted dots on a ring round the
+       skull, 35 degrees either side of the facing. True body-space points, so
+       they slide round the head as the figure turns, the near one a pixel lower
+       on the diagonals, one at the front edge in profile, none from behind. */
+    if(head==='fullhelm') return;                          // the visor is the face
+    const base = bony?(kit.bone||C.bone):skin;
+    const EYE_A=kit.eyes?0.82:0.611, EYE_RHO=3.4, eyeCol=bony?'#2a0a0a':shade(base,-118), eyeFar=bony?'#4a1a1a':shade(base,-78);
+    for(const s of [-1,1]){
+      const xr=s*EYE_RHO*Math.sin(EYE_A), yd=EYE_RHO*Math.cos(EYE_A);
+      const ex=h[0]+xr*r[0]+yd*d[0], vis=depth(xr,yd);
+      const ey=h[1]+vis*0.5;
+      if(vis<-0.7) continue;
+      const ex0=Math.floor(ex), ey0=Math.floor(ey);
+      if(kit.eyes){                                                 // monsters: glowing eyes under a scowling brow
+        const glow=vis>=1.2?kit.eyes:shade(kit.eyes,-60);
+        const rows = kit.bigEyes ? [0,1] : [0];                     // big eyes are two rows deep
+        for(const rr of rows){ if(onHead(ex0,ey0+rr)) g2.px(ex0,ey0+rr,glow); if(onHead(ex0+s,ey0+rr)) g2.px(ex0+s,ey0+rr,glow); }
+        if(vis>=1.2){ g2.px(ex0,ey0-1,C.blk); g2.px(ex0+s,ey0-2,C.blk); g2.px(ex0+s,ey0-1,C.blk); }   // the brow slants down toward the nose
+        continue;
+      }
+      if(onHead(ex0,ey0)){ g2.px(ex0,ey0, vis>=1.2?eyeCol:eyeFar); if(bony&&vis>=1.2) g2.px(ex0,ey0-1,eyeFar); }
+    }
+  });
+
+  parts.sort((a,b)=>a.dep-b.dep).forEach(p=>p.fn(g));
+  if(opt.emboss!==false){ g.shadowSide(36); g.emboss(30); }   // lit from the top-left, like the walls
+  if(opt.outline!==false) g.outline();
+  return g;
+}
+/* The light comes from the top-left, the same as on the walls. Every colour
+   mass gets a two-pixel shadow band down its right side and underside: the
+   outermost pixel darkest, the next one half as dark. With emboss lighting the
+   top-left rim, each part reads as a rounded solid rather than a flat cut-out. */
+Grid.prototype.shadowSide=function(amt){
+  const src=this.d.slice(), W=this.w;
+  const solid=(x,y)=>{ const c=(x>=0&&y>=0&&x<W&&y<this.h)?src[y*W+x]:null; return c&&c!==C.blk&&c!==SHADOW; };
+  for(let y=0;y<this.h;y++) for(let x=0;x<W;x++){
+    const c=src[y*W+x]; if(!c||c===C.blk||c===SHADOW) continue;
+    if(!solid(x+1,y)||!solid(x,y+1)) this.set(x,y,shade(c,-amt));
+    else if(!solid(x+2,y)||!solid(x,y+2)) this.set(x,y,shade(c,-amt/2));
+  }
+  return this;
+};
+/* The game's hero sprite set: eight facings by four walk frames, plus the four
+   old keys (down/up/right/left) pointing at the S/N/E/W rows so every menu,
+   portrait and the sheet viewer keep working unchanged. */
+const FACE_IDX={down:0, downleft:1, left:2, upleft:3, up:4, upright:5, right:6, downright:7};
+function makeHumanoid(kit){
+  const f8=FACING_NAMES.map((_,f)=>[0,1,2,3].map(k=>bake(humanoidFrame(f,k,kit,{shadow:false}))));
+  return { f8, hum:true, down:f8[0], left:f8[2], up:f8[4], right:f8[6] };
+}
+/* the frame to draw for a hero: the walk cycle while moving, the pass pose at rest */
+function heroFrame(ent){
+  const S=HSPR[ent.cls]; if(!S||!S.hum) return S[ent.dir][ent.frame];
+  const face=FACE_IDX[ent.face||ent.aim||ent.dir]||0;
+  const moving=(frame-(ent.movedAt||-99))<3;
+  return S.f8[face][moving ? ((ent.walk||0)>>3)&3 : 1];
+}
+/* ==========================================================================
+   CAST SHADOWS
+   The walls are lit from the top-left and throw their shadow down and to the
+   right. Every creature now throws one the same way: its own silhouette,
+   flipped onto the floor from its feet, squashed to under half height and
+   sheared toward the bottom-right. Silhouettes are cut once per sprite.
+   ========================================================================== */
+const SIL=new WeakMap();
+function silhouette(img){
+  let s=SIL.get(img); if(s) return s;
+  s=document.createElement('canvas'); s.width=img.width; s.height=img.height;
+  const c=s.getContext('2d'); c.drawImage(img,0,0);
+  c.globalCompositeOperation='source-in'; c.fillStyle='#000'; c.fillRect(0,0,s.width,s.height);
+  SIL.set(img,s); return s;
+}
+const SHADOW_SHEAR=0.55, SHADOW_SQUASH=0.42, SHADOW_ALPHA=0.34;
+function castShadow(img,x,y,half,scale){
+  scale=scale||1;
+  const w=img.width*scale, h=img.height*scale, fx=Math.round(x), fy=Math.round(y)+half;   // the feet
+  ctx.save();
+  ctx.globalAlpha=SHADOW_ALPHA;
+  ctx.translate(fx,fy);
+  ctx.transform(1,0,-SHADOW_SHEAR,-SHADOW_SQUASH, SHADOW_SHEAR*half, SHADOW_SQUASH*half);   // feet stay put, the head lands down-right
+  ctx.drawImage(silhouette(img),-w/2,-half,w,h);
+  ctx.restore();
+}
+function drawHero(ent){
+  const img=heroFrame(ent), h=(HSPR[ent.cls]&&HSPR[ent.cls].hum)?HUM_H:ACT_H;
+  castShadow(img,ent.x,ent.y,h);
+  ctx.drawImage(img,Math.round(ent.x)-h,Math.round(ent.y)-h);
+}
+
+
+
+/* ============================ the master quadruped ============================
+   Same body space and camera as the humanoid. A beast is a chain of spheres
+   along its spine - spheres project as discs whatever the facing, so the
+   barrel foreshortens correctly as it turns - with four short legs in a
+   diagonal gait, and a head, tail and features that are body-space parts.
+   Chunky and squat: belly low, legs a third of the body height. */
+function quadrupedFrame(f,phase,kit,opt){
+  opt=opt||{};
+  const g=new Grid(HUM,HUM);
+  const d=FACING_VEC[f], r=[-d[1],d[0]];
+  const OX=16, OY=29;
+  const P=(xr,yd,z)=>[OX + xr*r[0] + yd*d[0], OY + (xr*r[1] + yd*d[1])*0.5 - z];
+  const depth=(xr,yd)=>xr*r[1] + yd*d[1];
+  const parts=[]; const add=(dep,fn)=>parts.push({dep,fn});
+  const F=kit.feature, main=kit.main, light=kit.light||shade(main,30), dark=kit.dark||shade(main,-40);
+  const legC=kit.leg||shade(main,-18);                 // legs get their own colour so they survive the shading
+  const mainD=shade(main,-26);
+  /* diagonal gait: front-left with back-right, the other pair opposite; pass frames lift the body a pixel */
+  const S = {                                       // species proportions, body units - wide, low, legs clear of the belly
+    llama:{L:8,   R:4.2, zc:7,   hip:5.5, legW:3,   legX:4,   flat:0.9},
+    snout:{L:11,  R:4.4, zc:4.2, hip:3,   legW:3,   legX:5,   flat:0.6},
+    jaw:  {L:10,  R:5.6, zc:6.5, hip:4,   legW:4.5, legX:4.4, flat:0.82},
+    goat: {L:8.5, R:4.4, zc:6.2, hip:5,   legW:3,   legX:4,   flat:0.88},
+    trunk:{L:10.5,R:5.8, zc:6.5, hip:4.5, legW:4.5, legX:4.8, flat:0.88},
+    spider:{L:7,  R:3.4, zc:4.2, hip:4,   legW:2,   legX:4.6, flat:0.8}
+  }[F];
+  const amp = 1.4 + S.hip*0.22;                       // stride scales with leg length: a stumpy hippo steps short
+  const K=[[amp,0],[amp*0.2,1],[-amp,0],[-amp*0.2,1]][phase];
+  const sw=K[0], bob=K[1];
+  const blob=(g2,xr,yd,z,R,col,flat)=>{ const p=P(xr,yd,z+bob); g2.ell(p[0],p[1],R,R*(flat||0.85),col); };
+  const seg=(g2,a,b,w,col)=>{ const A=P(a[0],a[1],a[2]+bob), B=P(b[0],b[1],b[2]+bob); line(g2,A[0],A[1],B[0],B[1],w,col); };
+
+  if(opt.shadow!==false){ const s=P(0,0,0); g.ell(s[0],s[1]+0.5,S.L*0.42,S.R*0.42,SHADOW); }   // one flat pool, never wider than the feet
+
+  /* ---- legs: hip to foot, splayed a little, the diagonal pairs swinging against each other */
+  const leg=(xr,yd,swing)=>{
+    const frontal=Math.abs(d[1]);                     // 1 face-on, 0 broadside
+    const spread=1.05+0.28*frontal;                   // the arcade cheat: splay the feet a little wider when seen head-on
+    const hip=[xr,yd,S.hip], ft=[xr*spread,yd+swing,0];
+    add(depth(xr,yd+swing*0.5), g2=>{
+      seg(g2,hip,ft,S.legW,legC);
+      const p=P(ft[0],ft[1],bob); g2.ell(p[0],p[1]-0.3,S.legW*0.7+0.6,1.3,shade(legC,-30));   // a hoof or paw
+    });
+  };
+  const fy=S.L*0.36, bx=S.legX;
+  leg(-bx, fy, sw); leg(bx, fy, -sw); leg(-bx, -fy, -sw); leg(bx, -fy, sw);
+
+  /* ---- the barrel: a chain of spheres along the spine, fat in the middle */
+  for(let t=-S.L/2;t<=S.L/2;t+=1){
+    const u=Math.abs(t)/(S.L/2), R=S.R*(1-0.28*u*u);
+    add(depth(0,t), g2=>{ blob(g2,0,t,S.zc,R,main,S.flat); blob(g2,0,t,S.zc+R*0.35,R*0.62,light,S.flat); blob(g2,0,t,S.zc-R*0.45,R*0.7,mainD,S.flat); });
+  }
+
+  /* ---- species */
+  const n=S.L/2;                                              // the chest
+  if(F==='llama'){
+    for(let z=S.zc+1;z<=15;z+=1){ const t=n-0.5+(z-S.zc)*0.3; add(depth(0,t)+0.02, g2=>blob(g2,0,t,z,2,main)); }   // the neck
+    add(depth(0,n+2.6)+0.05, g2=>{ blob(g2,0,n+2.6,16.2,2.5,main); blob(g2,0,n+3.6,15.6,1.6,mainD);   // head and muzzle
+      seg(g2,[-1.5,n+2.2,17.5],[-2.2,n+1.5,20],1.6,main); seg(g2,[1.5,n+2.2,17.5],[2.2,n+1.5,20],1.6,main); });   // banana ears
+    add(depth(0,-n-0.5)-0.02, g2=>blob(g2,0,-n-0.8,S.zc+1.5,1.4,dark));                                            // tail
+  }
+  if(F==='snout'){
+    add(depth(0,n+1)+0.05, g2=>{ blob(g2,0,n+1,4.6,2.6,main,0.7); blob(g2,0,n+1,6.2,1.6,light,0.7); });          // low flat head
+    for(let t=1.5;t<=6;t+=1){ const R=2.1-t*0.16; add(depth(0,n+1+t)+0.06, g2=>{ blob(g2,0,n+1+t,4,R,main,0.65); blob(g2,0,n+1+t,3.2,R*0.9,mainD,0.6); }); }   // snout
+    add(depth(0,n+6.5)+0.07, g2=>{ for(const s of [-1,1]){ const p=P(s*1.4,n+4,3.4+bob); g2.px(p[0],p[1],C.bone); const q=P(s*1.1,n+6.5,3.4+bob); g2.px(q[0],q[1],C.bone); } });   // teeth
+    for(let t=1;t<=7;t+=1){ const R=2.2-t*0.22; add(depth(0,-n-t)-0.02, g2=>blob(g2,0,-n-t,3.8-t*0.15,R,main,0.65)); }   // long tapering tail
+    for(let t=-4;t<=4;t+=2) add(depth(0,t)+0.03, g2=>{ const p=P(0,t,S.zc+S.R*0.62+0.8+bob); g2.px(p[0],p[1],dark); });   // scutes
+  }
+  if(F==='jaw'){
+    add(depth(0,n+2)+0.05, g2=>{ blob(g2,0,n+2,8.2,3.9,main,0.85); blob(g2,0,n+1.5,9.8,2.4,light,0.8);                   // huge head
+      blob(g2,0,n+3.2,5.6,3.1,mainD,0.75);                                                                     // the jaw
+      for(const s of [-1,1]){ blob(g2,s*2.8,n+0.8,12,0.95,mainD); const t=P(s*2.2,n+6,5.2+bob); g2.px(t[0],t[1],C.bone); }   // ears, tusks
+      const m=P(0,n+6.1,6.6+bob); g2.rect(m[0]-2,m[1],4,1,shade(mainD,-40)); });                                // mouth line
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.6,S.zc+1,1.1,dark));
+  }
+  if(F==='goat'){
+    for(let z=S.zc+1;z<=13;z+=1){ const t=n-0.8+(z-S.zc)*0.4; add(depth(0,t)+0.02, g2=>blob(g2,0,t,z,1.9,main)); }    // the neck, held high
+    add(depth(0,n+2.4)+0.05, g2=>{ blob(g2,0,n+2.4,14.2,2.9,main);                                                     // head, up above the back
+      blob(g2,0,n+4.4,12.8,2,light); blob(g2,0,n+5.4,12,1.5,light);                                                   // the long muzzle, dropping forward
+      blob(g2,0,n+3.4,14.6,1.1,shade(light,10));                                                                       // a blaze down the face
+      blob(g2,0,n+2.6,16,1.7,mainD);                                                                                   // brow ridge under the horns
+      const nz=P(0,n+6.6,11.8+bob); g2.rect(nz[0]-1,nz[1],2,1,shade(dark,-30));                                       // nose
+      const mo=P(0,n+6,10.6+bob); g2.rect(mo[0]-1,mo[1],3,1,shade(main,-50));                                         // mouth line
+      seg(g2,[0,n+5.6,10.4],[0,n+5.2,8.6],1.3,light);                                                                   // beard
+      const sp=1+0.15*Math.abs(d[1]);                                                                                    // horns and ears splay a touch wider face-on
+      for(const s of [-1,1]){ seg(g2,[s*1.4*sp,n+2,16.2],[s*2.6*sp,n+0.2,18.6],1.6,C.bone); seg(g2,[s*2.6*sp,n+0.2,18.6],[s*3*sp,-0.6+n,17.4],1.2,C.bone);   // horns back and hooked
+                              seg(g2,[s*2.4*sp,n+2.4,14.6],[s*4.2*sp,n+2,15.2],1.5,main); } });                        // ears, out sideways
+    for(let t=-3;t<=3;t+=1) add(depth(0,t)+0.03, g2=>{ const p=P(0,t,S.zc+S.R*0.62+0.6+bob); g2.rect(p[0]-2,p[1],4,1,shade(main,-45)); });   // barding
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.8,S.zc+1.2,1.2,light));
+  }
+  if(F==='trunk'){
+    for(let t=-3;t<=1;t+=1) add(depth(0,t)+0.01, g2=>{ blob(g2,0,t,S.zc+3.2,3.6,main); blob(g2,0,t,S.zc+4.6,2.2,light); });   // the dome over the shoulders
+    add(depth(0,n+2)+0.05, g2=>{ blob(g2,0,n+2,9,3.4,main); blob(g2,0,n+1.8,10.4,2,light);                            // head
+      for(const s of [-1,1]){ blob(g2,s*3.6,n+1.2,9.8,1.7,mainD);                                                    // ears
+        seg(g2,[s*2.2,n+4.2,6.4],[s*3.6,n+8.4,5.4],2.4,C.bone); seg(g2,[s*3.6,n+8.4,5.4],[s*4.2,n+11.6,9],1.9,C.bone);   // tusks: out and down, then sweeping up
+        const tp=P(s*4.2,n+11.6,9+bob); g2.px(tp[0],tp[1],shade(C.bone,30)); } });
+    for(let z=7;z>=0.5;z-=1){ const t=n+4.6+(7-z)*0.22; add(depth(0,t)+0.06, g2=>blob(g2,0,t,z,1.3-(7-z)*0.04,dark)); }        // trunk, hanging
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.7,S.zc+1.8,1,dark));
+  }
+
+  /* ---- eyes on the head sphere: the same ring rule as the humanoid, muted dark dots */
+  if(F==='spider'){
+    add(depth(0,-n-1.2)-0.03, g2=>{ blob(g2,0,-n-1.4,S.zc+1.2,4.4,main,0.85); blob(g2,0,-n-1.4,S.zc+2.6,2.4,light,0.8);   // the abdomen, big and round
+      const m=P(0,-n-1.4,S.zc+3.2+bob); g2.rect(m[0]-1,m[1],2,2,'#c02020'); });                                        // a red mark on its back
+    add(depth(0,n+1.2)+0.05, g2=>{ blob(g2,0,n+1.2,4.8,2.2,main,0.85);                                                  // a small head
+      for(const s of [-1,1]) seg(g2,[s*1.2,n+3,4],[s*1.8,n+4.6,3],1.2,dark); });                                        // fangs
+    for(const s of [-1,1]) for(const t of [-1.5,1.5]) add(depth(s*4,t)+0.02, g2=>seg(g2,[s*2.6,t,S.zc+1],[s*7,t*2.2,0.4],1.4,legC));   // four more legs, splayed
+  }
+  const H = {llama:[n+2.6,16.2,2.5], snout:[n+1,5.8,2.6], jaw:[n+2,9.4,3.9], goat:[n+2.4,14.2,2.9], trunk:[n+2,9.6,3.4], spider:[n+1.2,4.8,2.2]}[F];
+  add(depth(0,H[0])+0.2, g2=>{
+    const hc=P(0,H[0],H[1]+bob), rho=H[2]*0.72, eyeCol=shade(kit.eye||dark,-40);
+    for(const s of [-1,1]){
+      const xr=s*rho*Math.sin(0.75), yd=rho*Math.cos(0.75);
+      const vis=depth(xr,yd); if(vis<-0.6) continue;
+      const p=[hc[0]+xr*r[0]+yd*d[0], hc[1]+vis*0.5];
+      g2.px(p[0],p[1],eyeCol); if(F==='jaw'||F==='trunk'||F==='goat'||F==='spider') g2.px(p[0]+ (s>0?1:-1),p[1],eyeCol);
+      if(F==='spider'){ g2.px(p[0],p[1]+1,eyeCol); g2.px(p[0]+(s>0?2:-2),p[1]-1,eyeCol); }   // a cluster of eyes
+    }
+  });
+
+  parts.sort((a,b)=>a.dep-b.dep).forEach(p=>p.fn(g));
+  if(opt.emboss!==false){ g.shadowSide(20); g.emboss(30); }   // lighter side shadow: a beast's legs are all edge
+  if(opt.outline!==false) g.outline();
+  return g;
+}
+/* the game's beast sprite set: same shape as the humanoid one */
+const QLEG={llama:'#5a4a30', crocodile:'#2a4a26', hippo:'#5a4252', goat:'#3a3630', mammoth:'#4a3c2e', spider:'#3a3a44'};   // leg colours that read on the floor
+function makeQuadruped(id,kit){
+  const k=Object.assign({},kit,{leg:QLEG[id]});
+  const f8=FACING_NAMES.map((_,f)=>[0,1,2,3].map(p=>bake(quadrupedFrame(f,p,k,{shadow:false}))));
+  return { f8, hum:true, down:f8[0], left:f8[2], up:f8[4], right:f8[6] };
+}
+
 function makeHero(p){
   const set={
     down: [0,1].map(f=>SA(g=>{heroBody(g,'down',f,p); g.emboss(26).outline();})),
@@ -1118,11 +1538,53 @@ const ROSTER=[
   {id:'necro',    name:'Necromancer',group:'undead',hp:700, spd:0.92,rate:15,pow:4,rng:104,
    kit:{main:'#2a5a4a',light:'#70d8b0',dark:'#0e2a20',boot:'#0e2a20',bootL:'#2a5a4a',hat:'cowl',weapon:'staff',skin:C.bone}}
 ];
+/* Kits for the humanoid builder, one per roster entry: colours plus headgear,
+   weapon and off-hand. Beasts keep their own builder. */
+const HUMKIT={
+  barbarian:{skin:'#e8b07a', hair:'#5a2e12', tunic:'#8a5a2a', trousers:'#4a3018', boots:'#3a2210', steel:'#b8b8c8', head:'fullhelm', horns:true, weapon:'axe', cape:'#5a1a10'},
+  knight:   {skin:'#e8b07a', hair:'#3a2a1a', tunic:'#1e4fa8', trousers:'#1a2a5a', boots:'#2a2a3a', steel:'#c4c4d4', head:'helm', weapon:'sword', offhand:'shield', shield:'#cc2418', chest:'plate', cape:'#1a2a6a'},
+  soldier:  {skin:'#e8b07a', hair:'#4a3018', tunic:'#4a6a8a', trousers:'#1e3450', boots:'#2a2a3a', steel:'#9aa8c0', head:'helm', weapon:'spear', offhand:'shield', shield:'#3a5a7a', cape:'#2a3a5a'},
+  fighter:  {skin:'#e8b07a', hair:'#3a2a1a', tunic:'#a83828', trousers:'#5e1408', boots:'#3a2210', steel:'#b8a8a0', head:'helm', weapon:'sword', cape:'#6e0f06'},
+  paladin:  {skin:'#e8b07a', hair:'#e8d060', tunic:'#d8c060', trousers:'#7a6000', boots:'#3a3a4a', steel:'#e0e0ec', head:'winghelm', weapon:'sword', offhand:'shield', shield:'#ffd23c', chest:'plate', cape:'#e8e0c0'},
+  thief:    {skin:'#e8b07a', hair:'#1a1a1a', tunic:'#4a4a5a', trousers:'#2a2a34', boots:'#1a1a22', steel:'#d8d8e8', head:'hood', cloth:'#2a2a34', weapon:'dagger', slim:true, cape:'#1a1a24'},
+  valkyrie: {skin:'#f0c090', hair:'#e8d060', tunic:'#2f5fb0', trousers:'#7a1a2a', boots:'#5a3a1a', steel:'#c8c8d8', head:'winghelm', weapon:'spear', offhand:'shield', shield:'#ffd23c', chest:'plate', female:true, cape:'#8a1a2a'},
+  ranger:   {skin:'#e8b07a', hair:'#4a3018', tunic:'#6a4a28', trousers:'#301e0e', boots:'#3a2210', steel:'#d8d8e8', head:'hood', cloth:'#5a3a1a', weapon:'bow', cape:'#3a2a18'},
+  archer:   {skin:'#e8b07a', hair:'#7a4a1a', tunic:'#2fa82a', trousers:'#3a5a2a', boots:'#5a3a1a', steel:'#d8d8e8', head:'hood', cloth:'#116014', weapon:'bow', cape:'#0e4a12'},
+  darkelf:  {skin:'#6a5a7a', hair:'#e8e8f0', tunic:'#4a2a6a', trousers:'#20103a', boots:'#20103a', steel:'#d8d8e8', head:'hair', weapon:'bow', chest:'cape', cape:'#20103a', female:true},
+  mage:     {skin:'#e8b07a', hair:'#d8d8e8', tunic:'#2f5ad0', trousers:'#122a68', boots:'#3a2a12', steel:'#d8d8e8', head:'wizard', cloth:'#2f5ad0', weapon:'wand', gem:'#8fb8ff', chest:'robe'},
+  wizard:   {skin:'#e8b07a', hair:'#d8d8e8', tunic:'#c8a018', trousers:'#7a5a00', boots:'#3a2a12', steel:'#d8d8e8', head:'wizard', cloth:'#c8a018', weapon:'staff', gem:'#9ad8ff', chest:'robe', female:true},
+  sorcerer: {skin:'#e8b07a', hair:'#1a1a1a', tunic:'#b03098', trousers:'#5a0e4a', boots:'#3a2a12', steel:'#d8d8e8', head:'hood', cloth:'#8a2078', weapon:'staff', gem:'#ff90e0', chest:'robe'},
+  battlemage:{skin:'#e8b07a', hair:'#3a2a1a', tunic:'#7a2a2a', trousers:'#3a1010', boots:'#2a2a3a', steel:'#8a7a9a', head:'helm', weapon:'staff', gem:'#c98cff', chest:'plate'},
+  cleric:   {skin:'#e8b07a', hair:'#5a2e12', tunic:'#e8e0d0', trousers:'#b0a898', boots:'#4a2a12', steel:'#ffd23c', head:'circlet', gold:'#ffd23c', weapon:'mace', offhand:'book', book:'#6e0f06', chest:'robe'},
+  skel:     {skin:'#e8e0d0', hair:'#4a4a40', tunic:'#9a9a8a', trousers:'#4a4a40', boots:'#3a3a30', steel:'#d8d8e8', head:'skull', weapon:'bow', cape:'#3a3a30'},
+  wight:    {skin:'#8aa8d8', hair:'#16203a', tunic:'#3a4a6a', trousers:'#16203a', boots:'#16203a', steel:'#d8d8e8', head:'hood', cloth:'#2a3a5a', weapon:'dagger', chest:'cape', cape:'#16203a'},
+  demon:    {skin:'#c83828', hair:'#4a0804', tunic:'#a01810', trousers:'#4a0804', boots:'#4a0804', steel:'#d8d8e8', head:'horns', weapon:'axe', cape:'#3a0a0a'},
+  cursed:   {skin:'#7a8a70', hair:'#1e2a1e', tunic:'#4a5a4a', trousers:'#1e2a1e', boots:'#2a2a3a', steel:'#6a7a6a', head:'fullhelm', weapon:'sword', cape:'#1e2a1e'},
+  necro:    {skin:'#b0b0c0', hair:'#1a1a1a', tunic:'#2a5a4a', trousers:'#0e2a20', boots:'#0e2a20', steel:'#d8d8e8', head:'skullhood', cloth:'#1e4a3a', weapon:'staff', gem:'#70d8b0', chest:'cape', cape:'#0e2a20'}
+};
 const HERO={};                        // id -> roster entry
 const HSPR={};                        // hero sprites live in their own map: some
 ROSTER.forEach(h=>{ HERO[h.id]=h;     // roster ids (demon) clash with monster ones
-  HSPR[h.id]= h.beast?makeBeast(h.kit):makeHero(h.kit); });
+  HSPR[h.id]= h.beast?makeQuadruped(h.id,h.kit) : HUMKIT[h.id]?makeHumanoid(HUMKIT[h.id]) : makeHero(h.kit); });
 function groupOf(id){ return GROUPS.find(g=>g.id===HERO[id].group); }
+/* Monsters on the same skeleton as the heroes: eight facings, four-frame walk.
+   Ghosts keep their floating sheet and the lords keep their bakes. */
+const ENEMY_KITS={
+  grunt:   {skin:'#c83828', hair:'#4a0804', tunic:'#7a1a10', trousers:'#4a0804', boots:'#2a0402', steel:'#8a8a9a', head:'horns', weapon:'mace', bulk:true, eyes:'#ffe040'},
+  demon:   {skin:'#a01810', hair:'#2a0404', tunic:'#3a0a0a', trousers:'#2a0404', boots:'#1a0202', steel:'#8a8a9a', head:'horns', weapon:'axe', chest:'cape', cape:'#1a0202', bulk:true, eyes:'#ff8a20', bigEyes:true},
+  goblin:  {skin:'#4a8a3a', hair:'#1e3a14', tunic:'#5a4a2a', trousers:'#2a2a1a', boots:'#1a1a10', steel:'#b8b8c8', head:'cap', cloth:'#3a2a1a', weapon:'spear', slim:true, eyes:'#ff3a2a'},
+  zombie:  {skin:'#7a9a6a', hair:'#2a3a20', tunic:'#4a4a3a', trousers:'#2a2a20', boots:'#1a1a10', steel:'#8a8a9a', head:'hair', weapon:'none', eyes:'#e8ffb0'},
+  ghost:   {skin:'#12121c', hands:'#e8ecf4', hair:'#12121c', tunic:'#d8dce8', trousers:'#d8dce8', boots:'#d8dce8', steel:'#d8dce8', head:'hood', cloth:'#c8ccd8', weapon:'none', wraith:true, chest:'robe', eyes:'#ff2a2a'},
+  sorcerer:  {skin:'#6a5a7a', hair:'#1a1a2a', tunic:'#2a1a3a', trousers:'#1a1020', boots:'#1a1020', steel:'#8a8a9a', head:'hood', cloth:'#1e1230', weapon:'staff', gem:'#c060ff', chest:'robe', slim:true, eyes:'#e070ff'},
+  troll:     {skin:'#6a8a5a', hair:'#2a3a20', tunic:'#4a3a2a', trousers:'#2a2018', boots:'#1a1410', steel:'#8a8a9a', head:'hair', weapon:'mace', bulk:true, eyes:'#ffd040'},
+  redskel:   {skin:'#c02020', bone:'#d03030', hair:'#4a0a0a', tunic:'#5a1010', trousers:'#3a0a0a', boots:'#2a0808', steel:'#d8d8e8', head:'skull', weapon:'axe', slim:true, eyes:'#ffe040'},
+  blackghost:{skin:'#0a0a10', hands:'#8a8a9a', hair:'#0a0a10', tunic:'#2a2a34', trousers:'#2a2a34', boots:'#2a2a34', steel:'#8a8a9a', head:'hood', cloth:'#1a1a24', weapon:'none', wraith:true, chest:'robe', eyes:'#8cf07a'},
+  firedemon: {skin:'#ff6a20', hair:'#7a2000', tunic:'#a03010', trousers:'#5a1808', boots:'#3a0a04', steel:'#8a8a9a', head:'horns', weapon:'none', bulk:true, eyes:'#ffff60', bigEyes:true},
+  blackskel: {skin:'#2a2a34', bone:'#34343e', hair:'#101018', tunic:'#1a1a24', trousers:'#101018', boots:'#101018', steel:'#8a8a9a', head:'skull', weapon:'staff', gem:'#ff8a20', slim:true, eyes:'#ff8a20'},
+  skeleton:{skin:'#e8e0d0', hair:'#4a4a40', tunic:'#5a5a50', trousers:'#3a3a30', boots:'#2a2a20', steel:'#d8d8e8', head:'skull', weapon:'dagger', slim:true, eyes:'#ff2a2a'}
+};
+const MSPR={}; Object.keys(ENEMY_KITS).forEach(k=>{ MSPR[k]=makeHumanoid(ENEMY_KITS[k]); });
+MSPR.spider=makeQuadruped('spider',{main:'#2a2a30',light:'#4a4a55',dark:'#101014',feature:'spider',eye:'#ff2020'});
 
 /* ----------------------------------------------------------- red grunt/demon */
 /* The grunt is the commonest thing on screen; the demon is the only monster
@@ -1173,26 +1635,20 @@ SPR.demon=[grunt(0,true),grunt(1,true)];
    painted in grey offset down-right, then in white, so the shadow survives
    along the right side and under the curl.                                  */
 function ghost(f){
+  /* The arcade ghost: a broad white sheet with a domed head, two big black
+     eye holes, a small open mouth and a ragged hem that ripples between the
+     two frames. Stub arms reach out either side. */
   return SA(g=>{
-    const W=C.wht, gy='#b4b4cc', gy2='#8e8ea8', st=f?1:0;
-    const sheet=(dx,dy,c)=>{
-      g.tri(9+dx,2+dy,10,7,c);                               // pointed hood
-      g.ell(14+dx,11+dy,6.6,5.2,c);
-      g.rect(8+dx,12+dy,13,7,c);
-      g.rect(9+dx,19+dy,11,2,c); g.rect(10+dx,21+dy,9,1,c);
-      g.rect(12+dx-st,22+dy,7,1,c); g.rect(14+dx-st,23+dy,6,1,c); g.rect(17+dx-st*2,24+dy,4,1,c);
-    };
-    sheet(2,1,gy);
-    sheet(0,0,W);
-    g.px(20-st*2,23,W); g.px(21-st*2,22,W); g.px(21-st*2,23,gy);   // tail flick
-    g.rect(19,6,2,13,gy);                                    // full-height shadow side
-    g.rect(10,15,1,4,gy); g.rect(16,16,1,5,gy);              // folds
-    g.rect(12,20,5,1,gy2); g.rect(14-st,22,4,1,gy2);         // inner shading toward the bottom
-    g.rect(9,8,4,1,gy2); g.rect(15,8,4,1,gy2);               // brow ridge
-    g.rect(10,9,3,3,C.blk); g.rect(15,9,3,3,C.blk);          // hollow sockets
-    g.px(10,9,gy2); g.px(15,9,gy2);
-    g.ell(14,14.5,2,1.4,C.blk);                              // mouth
-    g.outline();
+    const w=C.wht, sh=shade(C.wht,-22), st=f?1:0;
+    g.ell(14,10.5,8.5,8,w);                                   // the dome
+    g.rect(5.5,10,17,11,w);                                   // the sheet
+    for(let i=0;i<4;i++){ const x=6+i*4.2, dip=((i+st)%2)?2:0; g.tri(x,20,4,3+dip,w); }   // the ragged hem, rippling
+    g.rect(19,6,3,15,sh); g.ell(19,9,2.4,5,sh);               // the far side in shade
+    g.rect(2,11+st,4,3,w); g.rect(22,11-st,4,3,w);            // stub arms
+    g.ell(10.5,10.5,2.5,3,C.blk); g.ell(17.5,10.5,2.5,3,C.blk);   // eye holes
+    g.px(11,9,'#3a3a4a').px(18,9,'#3a3a4a');                  // a glint deep in each
+    g.ell(14,16,1.8,1.4,C.blk);                               // the mouth, a small o
+    g.emboss(18).outline();
   });
 }
 SPR.ghost=[ghost(0),ghost(1)];
@@ -1429,6 +1885,15 @@ SPR.elixir=S(g=>{                                // rare health draught
   g.ell(10,12,4,3.6,'#ff5a6a');
   g.ell(8.5,10,1.6,1.4,'#ffd0d8');               // highlight
   g.rect(7,5,6,3,'#8c0018');                     // neck
+  g.px(10,7,C.wht);
+  g.emboss(26).outline();
+});
+SPR.heal=S(g=>{                                  // the golden draught: everyone to full
+  g.rect(8,2,4,3,C.gry); g.rect(8,2,4,1,shade(C.gry,40));
+  g.ell(10,12,5.5,5,'#c8900c');
+  g.ell(10,12,4,3.6,'#ffd23c');
+  g.ell(8.5,10,1.6,1.4,'#fff4b0');
+  g.rect(7,5,6,3,'#8a6000');
   g.px(10,7,C.wht);
   g.emboss(26).outline();
 });
@@ -2009,7 +2474,25 @@ function far(list,x,y,d){ return list.every(o=>Math.abs(o.tx-x)+Math.abs(o.ty-y)
    the nineties. Floor 20 therefore gains 40% a minute; floor 30 gains 30%;
    floor 80 gains 24%. The minute mark is announced as a surge.
    ========================================================================== */
-let floorFrames=0, waveN=0;
+let floorFrames=0, waveN=0, pendingSkip=0;   /* trapdoor cards fall after the card screen closes */
+/* ==========================================================================
+   THE HIDDEN VAULT
+   About one floor in nine has a crack in a wall. Walk into it and you drop
+   into a small treasure room - no monsters, no generators, only gold and
+   jewels - whose exit leads on to the next floor as usual.
+   ========================================================================== */
+let crack=null, vaultNext=false, inVault=false;
+const VAULT_CHANCE=1/9;
+function enterVault(){
+  vaultNext=true;
+  boom(player.x,player.y,C.yel); boom(player.x,player.y,C.wht);
+  beep(660,0.12,'square',0.05); beep(880,0.16,'sine',0.05); beep(1320,0.3,'sine',0.05);
+  newLevel(true);
+  document.getElementById('gateNum').textContent='A HIDDEN VAULT';
+  document.getElementById('gateName').textContent='the crack opens on a treasure room';
+  document.getElementById('gateSub').textContent='no monsters   -   take everything   -   the way out leads to floor '+(level+1);
+  gateEl.className=''; gateAt=Date.now(); mode='gate';
+}
 function waveStep(lv){                       // percent of speed added per minute
   const L=(lv===undefined?level:lv);
   const f = L<=20?2 : L<=30?1.2 : L<=40?1.0 : L<=50?0.8 : L<=60?0.6 : L<=70?0.5 : L<=80?0.4 : L<=90?0.3 : 0.2;
@@ -2019,7 +2502,7 @@ function genRate(){ return 1 + waveN*waveStep()/100; }   // multiplier on genera
 function genCap(){ return Math.min(400, 60+level*4); }   // live monsters allowed before generators pause
 function newLevel(keepStats){
   floorFrames=0; waveN=0;
-  MAP_W = MAP_H = mapSizeFor(level);         // this floor's size
+  MAP_W = MAP_H = vaultNext ? 21 : mapSizeFor(level);   // this floor's size; a vault is a small room
   VW = TILE*MAP_W; VH = TILE*MAP_H;
   setTheme(level); genMap(); prerender();
   const tiles=freeTiles();
@@ -2067,6 +2550,26 @@ function newLevel(keepStats){
   camY=Math.max(0,Math.min(VH-CAM_H,player.y-CAM_H/2));
 
   const ex=take(14); items.push({t:'exit',tx:ex[0],ty:ex[1]});
+  crack=null;
+  if(vaultNext){                                  // the treasure room itself
+    vaultNext=false; inVault=true; shop=null;
+    for(let i=0;i<70;i++){ const t=take(1); items.push({t:'treasure',tx:t[0],ty:t[1]}); }
+    for(let i=0;i<45;i++){ const t=take(1); items.push({t:'orb',tx:t[0],ty:t[1]}); }
+    for(let i=0;i<8;i++){ const t=take(1); items.push({t:'coin',tx:t[0],ty:t[1]}); }
+    for(let i=0;i<2;i++){ const t=take(3); items.push({t:'food',tx:t[0],ty:t[1]}); }
+    deployAll();
+    showMsg('A HIDDEN VAULT','riches, and not a monster in sight');
+    return;
+  }
+  inVault=false;
+  if(level>=2 && rnd()<VAULT_CHANCE){              // a crack in some interior wall, with floor on one side
+    for(let i=0;i<600&&!crack;i++){
+      const x=1+ri(MAP_W-2), y=1+ri(MAP_H-2);
+      if(!isWall(x,y)) continue;
+      const open=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>!isWall(x+d[0],y+d[1]));
+      if(open.length>=1 && far(used,x,y,4)) crack={tx:x,ty:y};
+    }
+  }
   /* the map is four times the old size, so the floor gets four times the stuff */
   /* The company grows by one every second floor, so the garrison grows with it:
      more monsters, more generators, and a nastier mix the deeper you go. */
@@ -2087,6 +2590,8 @@ function newLevel(keepStats){
   for(let i=0;i<4;i++){ const t=take(3); items.push({t:'potion',tx:t[0],ty:t[1]}); }
   /* the health draught is rare: one every second floor, and no more */
   if(level%2===0){ const t=take(6); items.push({t:'elixir',tx:t[0],ty:t[1]}); }
+  /* the golden draught heals the whole company: most floors in every three */
+  if(level%3===1 || (level%3===2 && rnd()<0.5)){ const t=take(6); items.push({t:'heal',tx:t[0],ty:t[1]}); }
   /* a supercharge every third floor, hidden well away from the entrance */
   if(level%3===0){ const t=take(8); items.push({t:'super',tx:t[0],ty:t[1]}); }
   /* the purple tonic mends a follower, so it turns up on the floors between */
@@ -2286,7 +2791,15 @@ function spawn(tx,ty,kind){
             goblin:{hp:2+((level/3)|0),sp:ENEMY_SPEED*1.15,dmg:12,pts:25},     // quick, spear
             zombie:{hp:6+Math.round(level*1.2),sp:ENEMY_SPEED*0.58,dmg:40,pts:45},  // slow, tough
             skeleton:{hp:3+((level/2)|0),sp:ENEMY_SPEED*0.95,dmg:18,pts:35},   // shuriken
-            ghost:{hp:1,sp:ENEMY_SPEED,dmg:12,pts:10}}[kind];
+            ghost:{hp:1,sp:ENEMY_SPEED,dmg:12,pts:10},
+            /* the band monsters: each rules ten floors, then lingers for variety */
+            sorcerer:  {hp:4+((level/2)|0), sp:ENEMY_SPEED*0.9, dmg:22, pts:50},     // missiles
+            troll:     {hp:8+Math.round(level*1.4), sp:ENEMY_SPEED*0.7, dmg:38, pts:70},   // acid
+            redskel:   {hp:5+((level/2)|0), sp:ENEMY_SPEED, dmg:24, pts:60},         // axes
+            blackghost:{hp:3+((level/3)|0), sp:ENEMY_SPEED*1.05, dmg:20, pts:55},    // ectoplasm
+            spider:    {hp:5+((level/2)|0), sp:ENEMY_SPEED*1.2, dmg:18, pts:60},     // webs
+            firedemon: {hp:8+Math.round(level*1.6), sp:ENEMY_SPEED*0.95, dmg:40, pts:90},  // fireballs
+            blackskel: {hp:7+level, sp:ENEMY_SPEED*0.9, dmg:30, pts:100}}[kind];      // fire orbs
   const dD=depthDmg(), dS=depthSpeed();
   enemies.push({kind,x:tx*TILE+10,y:ty*TILE+10,hp:st.hp,
                 sp:st.sp*dS*up.enemySlow, dmg:Math.round(st.dmg*dD), pts:st.pts,
@@ -2296,7 +2809,13 @@ function spawn(tx,ty,kind){
 
 /* Which monster fills a slot. Goblins show up from floor three, skeletons from
    eight, zombies from twelve, and each takes a growing slice of the garrison. */
+/* Each band monster rules its ten floors - close to half of every spawn - and
+   afterwards turns up now and then for variety. Goblins keep their old start too. */
+const BANDS=[['goblin',10],['sorcerer',20],['troll',30],['redskel',40],['blackghost',50],['spider',60],['firedemon',70],['blackskel',80]];
 function pickMonster(i,demonShare){
+  const cur=BANDS.find(b=>level>=b[1]&&level<b[1]+10);
+  if(cur && rnd()<0.45) return cur[0];
+  for(const b of BANDS) if(level>=b[1]+10 && rnd()<0.035) return b[0];
   if(level>2 && rnd()<demonShare) return 'demon';
   const r=rnd();
   if(level>=12 && r<0.14) return 'zombie';
@@ -2399,7 +2918,9 @@ addEventListener('keydown',e=>{
   if([' ','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k)>=0) e.preventDefault();
   if(mode==='gate'){ passGate(); return; }        // any key opens the floor
   if(mode==='sheet'){ if(k==='escape') closeSheet(); else if(k==='s') openSheet(); return; }
-  if(mode==='title'){ if(k==='enter'||k===' ') leaveTitle(); if(k==='s') openSheet(); return; }
+  if(mode==='title'){ if(k==='s') openSheet();                       // any other key starts the game
+                      else if(!['shift','control','alt','meta','capslock','tab'].includes(k)) leaveTitle();
+                      return; }
   if(mode==='fallen'){ resumeFromFall(); return; }   // any key carries the run on
   if(mode==='shop'){
     if(k==='escape'||k==='enter') closeShop();
@@ -2433,6 +2954,7 @@ addEventListener('keydown',e=>{
   if(k==='p'||k==='escape') togglePause();
   if(k==='b'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='potion'); if(i>=0) useSlot(i); }
   if(k==='h'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='elixir'); if(i>=0) useSlot(i); }
+  if(k==='g'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='heal'); if(i>=0) useSlot(i); }
   if(k>='1'&&k<='6') useSlot(+k-1);
 });
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
@@ -2469,6 +2991,9 @@ function hotInfo(kind){
   if(kind==='elixir') return {name:'Health Draught', kind:'potion',
     desc:'Restores half of your own maximum health. Carry up to '+ELIXIR_MAX+'.',
     foot:'consumed on use'};
+  if(kind==='heal') return {name:'Golden Draught', kind:'potion',
+    desc:'Restores you and every follower to full health, and puts the fallen back on their feet. Carry up to '+HEAL_MAX+'.',
+    foot:'consumed on use'};
   if(kind==='tonic') return {name:'Follower Tonic', kind:'potion',
     desc:'Choose one follower and restore half their maximum health. '+
          'Followers take real damage and die for good, so keep one spare.',
@@ -2499,6 +3024,7 @@ function hideTip(){ tipEl.className='hidden'; }
 const HOT_KINDS={
   potion:{spr:'potion', name:'Blast Potion'},
   elixir:{spr:'elixir', name:'Health Draught'},
+  heal:{spr:'heal', name:'Golden Draught'},
   tonic:{spr:'tonic',  name:'Follower Tonic'},
   scrollHeal:{spr:'scrollHeal', name:'Scroll of Healing',     scroll:true},
   scrollF25:{spr:'scrollF25',   name:'Scroll of Mending',     scroll:true},
@@ -2511,6 +3037,7 @@ function countOf(kind){
 }
 function addToHotbar(kind){
   if(kind==='elixir'&&countOf('elixir')>=ELIXIR_MAX) return false;   // five is the ceiling
+  if(kind==='heal'&&countOf('heal')>=HEAL_MAX) return false;
   if(kind==='tonic'&&countOf('tonic')>=TONIC_MAX) return false;
   if(HOT_KINDS[kind]&&HOT_KINDS[kind].scroll){                       // scrolls carry charges
     const sc=scrollFor(kind), full=(sc&&sc.charges)||SCROLL_CHARGES;
@@ -2537,7 +3064,15 @@ function useSlot(i){
     hotDirty=true;
     return;
   }
-  if(sl.t==='elixir'){
+  if(sl.t==='heal'){                             // the golden draught: everyone to full, the fallen back on their feet
+    player.hp=player.maxHp; if(party[0]) party[0].hp=player.hp;
+    for(const a of allies){ a.hp=a.maxHp; if(a.down){ a.down=false; a.downT=0; } if(a.member){ a.member.hp=a.maxHp; a.member.down=false; } }
+    for(const m of party){ m.hp=m.maxHp; m.down=false; }
+    boom(player.x,player.y,C.yel); boom(player.x,player.y,C.wht);
+    beep(660,0.1,'sine',0.06); beep(880,0.14,'sine',0.06); beep(1320,0.3,'sine',0.05);
+    showMsg('GOLDEN DRAUGHT','the whole company restored');
+    for(let k=0;k<24;k++) particles.push({x:player.x,y:player.y, vx:(rnd()-0.5)*3, vy:-rnd()*3, life:22+ri(14), c:k%2?C.yel:C.wht});
+  } else if(sl.t==='elixir'){
     if(player.hp>=player.maxHp){ showMsg('ALREADY AT FULL HEALTH',''); return; }
     const heal=Math.round(player.maxHp*0.5);
     player.hp=Math.min(player.maxHp,player.hp+heal);
@@ -2689,7 +3224,7 @@ function makeWallsExits(){
 }
 function freshUpgrades(){
   return {atkRate:1, dmg:1, extraProj:0, bombs:0, bombInterval:600, moveSpd:1, orbs:0, orbSpeed:1, orbUptime:0.5,
-          spirit:0, multi:0, flame:0, axe:0, echo:0, storm:0, freeze:0, loot:0,
+          spirit:0, multi:0, flame:0, axe:0, echo:0, storm:0, freeze:0, loot:0, ward:0,
           potionPower:1, extraPotions:0, enemySlow:1, extraFood:0, extraKeys:0,
           orbBonus:0, orbBonusLeft:0, pendRate:0, pendSpd:0, taken:{}};
 }
@@ -2767,6 +3302,15 @@ const CARDS=[
      showMsg(HERO[h.id].name.toUpperCase()+' JOINS YOU','the company is '+party.length+' strong');
      beep(520,0.09,'square',0.05); beep(780,0.14,'sine',0.05);
    }},
+  {id:'trapdoor', ico:'⤵', k:'uti', cap:2, tt:'Trapdoor',
+   ds:'Drop straight through to the next floor',
+   go:()=>{ pendingSkip=1; }},
+  {id:'trapdoor2', ico:'⏬', k:'uti', cap:2, tt:'Deep Trapdoor',
+   ds:'Drop two floors at once',
+   go:()=>{ pendingSkip=2; }},
+  {id:'bulwark', ico:'⛨', k:'uti', cap:6, tt:'Bulwark',
+   ds:'You and the company absorb 10% more of every hit',
+   go:()=>{ up.ward++; }},
   {id:'freeze', ico:'✳', k:'off', cap:6, tt:'Deep Freeze',
    ds:'Freezes the whole floor now, and again as each one opens',
    go:()=>{ up.freeze++; freezeFloor(3+up.freeze*2); }},
@@ -2899,7 +3443,16 @@ function takeCard(i){
   pendingCards--;
   beep(660,0.08,'square',0.05); beep(990,0.14,'sine',0.05);
   if(pendingCards>0) offerCards();
-  else { cardsEl.className='hidden'; mode='play'; }
+  else {
+    cardsEl.className='hidden'; mode='play';
+    if(pendingSkip){                              // a trapdoor: through the floor, and the gate opens on arrival
+      const n=pendingSkip; pendingSkip=0;
+      if(level>=LEVELS_TOTAL){ winRun(); return; }
+      level=Math.min(LEVELS_TOTAL,level+n);
+      boom(player.x,player.y,C.yel); beep(220,0.2,'sawtooth',0.05); beep(110,0.4,'sawtooth',0.05);
+      newLevel(true); openGate(level);
+    }
+  }
 }
 const DIRV={}; DIRS8.forEach(d=>{ DIRV[d[0]]=[d[1],d[2]]; });
 /* nearest of the eight headings to an arbitrary vector */
@@ -2956,7 +3509,7 @@ const BOSSES=[
    comes round three times. Each pass is a different colour, and markedly bigger
    and stronger than the last. */
 const BOSS_CYCLES=3;
-const BOSS_PX=84;                  /* 28 x 3: a whole-number upscale */
+const BOSS_PX=96;                  /* 32 x 3: a whole-number upscale */
 const CYCLE_CROWN=['#c8a018','#d8d8e8','#ff5a4a'];   /* gold, silver, then blood */
 /* one crown per tier, drawn once with the Grid DSL so it gets shading and an outline */
 function crownSprite(col){
@@ -2975,33 +3528,37 @@ function crownSprite(col){
 const CROWN_SPR=CYCLE_CROWN.map(crownSprite);
 const CYCLE_TITLE=['','Greater ','Elder '];
 const BOSS_SPR={};                                // [bossIndex][cycle][frame]
+/* Kits for the eight lords on the hero skeleton: a bulky build, their own
+   headgear and weapon, glowing eyes. Baked at 32px and stepped up three
+   times, one clean integer scale, then hue-shifted for the later tiers with
+   the crown stamped on after the filter so it stays gold, silver or blood. */
+const BOSS_KITS=[
+  {skin:'#c83828', hair:'#4a0804', tunic:'#7a1a10', trousers:'#4a0804', boots:'#2a0402', steel:'#8a8a9a', head:'horns', weapon:'mace', bulk:true, eyes:'#ffe040', bigEyes:true},                 // The Grunt King
+  {skin:'#12121c', hands:'#e8ecf4', hair:'#12121c', tunic:'#e0e4f0', trousers:'#e0e4f0', boots:'#e0e4f0', steel:'#e0e4f0', head:'hood', cloth:'#d0d4e0', weapon:'none', wraith:true, chest:'robe', eyes:'#ff2a2a', bigEyes:true},   // Pale Tyrant
+  {skin:'#8a7a5a', hair:'#3a3020', tunic:'#6a5a3a', trousers:'#3a3020', boots:'#2a2010', steel:'#7a7a6a', head:'fullhelm', horns:true, weapon:'axe', bulk:true, eyes:'#ff8a20', bigEyes:true},   // The Ruin Colossus
+  {skin:'#3a6a34', hair:'#182f16', tunic:'#2a4a26', trousers:'#182f16', boots:'#0e1e0c', steel:'#8aa060', head:'horns', weapon:'spear', bulk:true, chest:'cape', cape:'#0e1e0c', eyes:'#c8ff40', bigEyes:true},   // Bog Hydra
+  {skin:'#e06020', hair:'#7a2000', tunic:'#a03010', trousers:'#5a1808', boots:'#3a0a04', steel:'#c0a040', head:'fullhelm', weapon:'axe', bulk:true, eyes:'#ffff60', bigEyes:true},          // Flame Warden
+  {skin:'#12121c', hands:'#c8a0e0', hair:'#12121c', tunic:'#4a2a6a', trousers:'#4a2a6a', boots:'#4a2a6a', steel:'#d8d8e8', head:'hood', cloth:'#3a1a5a', weapon:'dagger', wraith:true, chest:'robe', eyes:'#ff40a0', bigEyes:true},   // The Deep Widow
+  {skin:'#d8b090', hair:'#3a3a4a', tunic:'#2a4a8a', trousers:'#1a2a5a', boots:'#2a2a3a', steel:'#b0b8c8', head:'helm', weapon:'sword', offhand:'shield', shield:'#3a7fd5', chest:'plate', bulk:true, eyes:'#9ad8ff', bigEyes:true},   // Iron Marshal
+  {skin:'#e8e0d0', hair:'#1a1a2a', tunic:'#1a1a3a', trousers:'#101020', boots:'#101020', steel:'#8a8aa0', head:'skull', weapon:'axe', bulk:true, chest:'cape', cape:'#0a0a18', eyes:'#ff2a2a', bigEyes:true}     // The Last Horror
+];
 function bakeBosses(){
   BOSSES.forEach((b,i)=>{
     BOSS_SPR[i]=[];
+    const base=makeHumanoid(BOSS_KITS[i]||ENEMY_KITS.grunt);
     for(let cyc=0;cyc<BOSS_CYCLES;cyc++){
-      /* Bake at exactly the size we draw. The old code upscaled 20 -> 80 and
-         then the draw blitted that down to 36-48, a non-integer downscale of an
-         upscale: it deleted parts of the 1px outline and random interior pixels.
-         A crown is stamped on first so a lord is not merely a big grunt. */
-      BOSS_SPR[i][cyc]=[0,1].map(f=>{
-        const src=SPR[b.base][f];
-        const stamp=document.createElement('canvas'); stamp.width=ACT; stamp.height=ACT;
-        const sc=stamp.getContext('2d');
-        sc.imageSmoothingEnabled=false;
-        sc.drawImage(src,0,0);
+      const hue=cyc*137;
+      const f8=base.f8.map(row=>row.map(src=>{
         const cv=document.createElement('canvas'); cv.width=BOSS_PX; cv.height=BOSS_PX;
-        const c=cv.getContext('2d');
-        c.imageSmoothingEnabled=false;
-        const hue=(b.hue+cyc*137)%360;
-        c.filter='hue-rotate('+hue+'deg) saturate('+(1.15+cyc*0.2)+')';
-        c.drawImage(stamp,0,0,BOSS_PX,BOSS_PX);               // one clean 3x step
-        /* The crown goes on AFTER the hue filter, so it stays gold, silver or
-           blood rather than whatever the rotation made of it, and it is a real
-           crown - five points, a jewelled band, a shaded rim - not a flat bar. */
+        const c=cv.getContext('2d'); c.imageSmoothingEnabled=false;
+        c.filter = cyc ? 'hue-rotate('+hue+'deg) saturate('+(1.15+cyc*0.2)+')' : 'none';
+        c.drawImage(src,0,0,BOSS_PX,BOSS_PX);                   // one clean 3x step
         c.filter='none';
-        c.drawImage(CROWN_SPR[cyc],7*3,0,14*3,9*3);          // 3x, sat on the head
+        c.drawImage(CROWN_SPR[cyc],(HUM_H-7)*3,0,14*3,9*3);     // the crown, sat on the head after the filter
         return cv;
-      });
+      }));
+      const set=f8[0].slice(); set.f8=f8;                       // [0],[1] keep the south row for the sheet viewer
+      BOSS_SPR[i][cyc]=set;
     }
   });
 }
@@ -3093,6 +3650,7 @@ function meleeSwing(who){
     const dx=e.x-who.x, dy=e.y-who.y, d=Math.hypot(dx,dy)||1;
     if(d>reach+e.r) continue;
     if((dx/d)*v[0]+(dy/d)*v[1] < 0.35) continue;      // only what is in front of the blade
+    if(!clearShot(who.x,who.y,e.x,e.y)) continue;     // and nothing through a wall
     e.hp-=pow; e.hurt=6; hit++;
     if(e.kind!=='boss'){ e.kb=8; e.kx=(dx/d)*2.4; e.ky=(dy/d)*2.4; }
     for(let k=0;k<3;k++) particles.push({x:e.x,y:e.y,vx:(rnd()-0.5)*2,vy:(rnd()-0.5)*2,
@@ -3104,6 +3662,7 @@ function meleeSwing(who){
     const dx=g.x-who.x, dy=g.y-who.y, d=Math.hypot(dx,dy)||1;
     if(d>reach+8) continue;
     if((dx/d)*v[0]+(dy/d)*v[1] < 0.35) continue;
+    if(!clearShot(who.x,who.y,g.x,g.y)) continue;
     g.hp-=pow; hit++;
   }
   for(const b of eshots){                             // the blade swats bolts aside
@@ -3146,17 +3705,32 @@ function drawSwing(who){
    full of fire can be cleared rather than only dodged.
    ========================================================================== */
 const ESHOT_SPEED=2.1;
+/* what monsters throw: speed, share of their bite, life, radius, arrows to break, sound */
+const PROJ={
+  bolt:    {spd:2.1,  share:0.5,  life:150, r:5, hp:1, tone:180},
+  spear:   {spd:3.0,  share:0.6,  life:150, r:5, hp:1, tone:240},
+  shuriken:{spd:2.6,  share:0.45, life:150, r:5, hp:1, tone:520},
+  orb:     {spd:1.25, share:0.8,  life:300, r:7, hp:3, tone:110},   // lords and black skeletons
+  acid:    {spd:1.6,  share:0.7,  life:200, r:6, hp:1, tone:150},   // trolls
+  axe:     {spd:2.4,  share:0.7,  life:170, r:6, hp:1, tone:300},   // red skeletons
+  ecto:    {spd:1.4,  share:0.6,  life:220, r:6, hp:2, tone:90},    // black ghosts
+  web:     {spd:2.2,  share:0.2,  life:180, r:6, hp:1, tone:700},   // spiders: little damage, but it slows you
+  ball:    {spd:1.8,  share:0.9,  life:200, r:7, hp:2, tone:130}    // fire demons
+};
+/* who throws what, how far, and how often */
+const RANGED={goblin:{k:'spear',cd:120,range:180}, demon:{k:'bolt',cd:150,range:200}, skeleton:{k:'shuriken',cd:95,range:220},
+              sorcerer:{k:'bolt',cd:105,range:230}, troll:{k:'acid',cd:130,range:160}, redskel:{k:'axe',cd:100,range:200},
+              blackghost:{k:'ecto',cd:120,range:200}, spider:{k:'web',cd:140,range:170}, firedemon:{k:'ball',cd:130,range:220},
+              blackskel:{k:'orb',cd:150,range:240}};
 function monsterFire(e,tgt,kind){
   kind=kind||'bolt';
   const dx=tgt.x-e.x, dy=tgt.y-e.y, d=Math.hypot(dx,dy)||1;
-  const orb = kind==='orb';                       // a lord's slow, heavy missile
-  const spd = kind==='spear'?3.0 : kind==='shuriken'?2.6 : orb?1.25 : ESHOT_SPEED;
-  const share = kind==='spear'?0.6 : kind==='shuriken'?0.45 : orb?0.8 : 0.5;
+  const Q=PROJ[kind]||PROJ.bolt, orb=kind==='orb';
   eshots.push({x:e.x+(dx/d)*(orb?e.r:10), y:e.y+(dy/d)*(orb?e.r:10),
-               vx:(dx/d)*spd, vy:(dy/d)*spd, kind:kind,
+               vx:(dx/d)*Q.spd, vy:(dy/d)*Q.spd, kind:kind,
                dir:dirFromVec(dx,dy),
-               dmg:Math.max(4,Math.round(e.dmg*share)), life:orb?300:150, r:orb?7:5, hp:orb?3:1});
-  beep(kind==='spear'?240:kind==='shuriken'?520:orb?110:180,orb?0.16:0.07,'sawtooth',orb?0.05:0.035);
+               dmg:Math.max(4,Math.round(e.dmg*Q.share)), life:Q.life, r:Q.r, hp:Q.hp});
+  beep(Q.tone,Q.hp>1?0.16:0.07,'sawtooth',Q.hp>1?0.05:0.035);
 }
 /* ==========================================================================
    DUNGEON LORDS
@@ -3203,7 +3777,7 @@ function updateEshots(){
       b.dead=true; boom(b.x,b.y,C.orgD); continue;
     }
     if(Math.abs(b.x-player.x)<b.r+player.r && Math.abs(b.y-player.y)<b.r+player.r){
-      hurt(b.dmg); b.dead=true; boom(b.x,b.y,C.org); continue;
+      hurt(b.dmg); if(b.kind==='web') player.slowT=100; b.dead=true; boom(b.x,b.y,C.org); continue;
     }
     let struck=null;
     for(const a of allies)
@@ -3449,6 +4023,7 @@ function update(){
   if(player.shield>0) player.shield--;
   if(clericCd>0) clericCd--;
   if(frozenT>0) frozenT--;
+  if(player.slowT>0) player.slowT--;
 
   let dx=0,dy=0;
   if(keys['arrowleft']||keys['a']) dx=-1;
@@ -3459,6 +4034,15 @@ function update(){
   idleT = (dx||dy) ? 0 : idleT+1;                 // standing perfectly still
   if(idleT===IDLE_DOORS) openAllDoors();
   if(idleT===IDLE_WALLS) makeWallsExits();
+  if(crack && (dx||dy)){                          // pressing into the cracked wall drops you into the vault
+    const ptx=(player.x/TILE)|0, pty=(player.y/TILE)|0;
+    const ddx=crack.tx-ptx, ddy=crack.ty-pty;
+    const adjacent=(Math.abs(ddx)+Math.abs(ddy))===1, pushing=(ddx&&Math.sign(dx)===ddx)||(ddy&&Math.sign(dy)===ddy);
+    if(adjacent && pushing){
+      const cx=crack.tx*TILE+TILE/2, cy=crack.ty*TILE+TILE/2;
+      if(Math.abs(player.x-cx)<24 && Math.abs(player.y-cy)<24){ enterVault(); return; }
+    }
+  }
   if(escapeAll){                                  // any wall you touch is the way out
     /* A body of radius 7 stops with its centre exactly 17px from the centre of
        the wall tile it is pressed against, so the old "< 17" could never be
@@ -3483,13 +4067,14 @@ function update(){
   }
   if(dx||dy){
     const l=Math.hypot(dx,dy),
-          sp=PLAYER_SPEED*PH.spd*up.moveSpd*((party[0]&&party[0].super)?2:1);
+          sp=PLAYER_SPEED*PH.spd*up.moveSpd*((party[0]&&party[0].super)?2:1)*(player.slowT>0?0.5:1);   // webbed: half speed
     const bx=player.x, by=player.y;
     move(player,dx/l*sp,dy/l*sp);
     if(dx && Math.abs(player.x-bx)<0.01) laneAssist(player,dx,0);   // squeeze into passages
     if(dy && Math.abs(player.y-by)<0.01) laneAssist(player,0,dy);
     player.aim = dirFromVec(dx,dy);                                 // 8-way aim, diagonals included
     player.dir = spriteDir(player.aim);
+    player.face = player.aim; player.walk=(player.walk||0)+1; player.movedAt=frame;   // eight-way facing, four-frame walk
     if(frame%7===0) player.frame^=1;
   }
   if(player.cool>0) player.cool--;
@@ -3549,6 +4134,37 @@ function update(){
   enemies=enemies.filter(e=>e.hp>0);
   gens=gens.filter(g=>g.hp>0);
 
+  /* Monsters no longer stand inside one another: a cheap grid pass pushes
+     overlapping bodies apart through move(), so walls still hold them, and a
+     corridor full of grunts becomes a queue the way the arcade did it. */
+  const CELLS=new Map();
+  for(const e of enemies){                                                       // ghosts and lords queue too
+    const k=((e.x/TILE)|0)+','+((e.y/TILE)|0); const l=CELLS.get(k); if(l) l.push(e); else CELLS.set(k,[e]); }
+  for(const e of enemies){
+    if(frozenT>0) continue;
+    const cx=(e.x/TILE)|0, cy=(e.y/TILE)|0;
+    for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++){
+      const l=CELLS.get((cx+ox)+','+(cy+oy)); if(!l) continue;
+      for(const o of l){ if(o===e) continue;
+        let dx=e.x-o.x, dy=e.y-o.y, d=Math.hypot(dx,dy); const BODY=e.r+o.r;
+        if(d>=BODY) continue;
+        if(d<0.01){ dx=(e.wob>o.wob?1:-1); dy=0; d=1; }
+        const push=(BODY-d)*0.6; move(e,(dx/d)*push,(dy/d)*push);
+      }
+    }
+  }
+  /* would a step to (x,y) bring this monster closer into another one's body? */
+  const crowded=(e,x,y)=>{
+    const cx=(x/TILE)|0, cy=(y/TILE)|0;
+    for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++){
+      const l=CELLS.get((cx+ox)+','+(cy+oy)); if(!l) continue;
+      for(const o of l){ if(o===e) continue;
+        const BODY=e.r+o.r-0.5, dn=Math.hypot(x-o.x,y-o.y);
+        if(dn<BODY && dn<Math.hypot(e.x-o.x,e.y-o.y)) return true;   // closing in on someone: no
+      }
+    }
+    return false;
+  };
   for(const e of enemies){
     // chase whichever hero is closer
     const tgt=nearestHero(e);
@@ -3568,22 +4184,30 @@ function update(){
       if(ax>ay){ mx=Math.sign(ddx)*e.sp; if(blocked(e.x+mx,e.y,e.r)){ mx=0; my=(Math.sign(ddy)||1)*e.sp; } }
       else     { my=Math.sign(ddy)*e.sp; if(blocked(e.x,e.y+my,e.r)){ my=0; mx=(Math.sign(ddx)||1)*e.sp; } }
       if(e.kind==='ghost'){ e.wob+=0.12; mx+=Math.cos(e.wob)*0.25; my+=Math.sin(e.wob*1.3)*0.25; }
+      /* Nobody walks into the monster ahead: if the step would press into one,
+         try the other axis, else wait. That is what turns a crowd into a queue
+         that fills the nearest passage instead of a heap. */
+      if((mx||my) && crowded(e,e.x+mx,e.y+my)){
+        const alt = mx ? [0,(Math.sign(ddy)||1)*e.sp] : [(Math.sign(ddx)||1)*e.sp,0];
+        if(!blocked(e.x+alt[0],e.y+alt[1],e.r) && !crowded(e,e.x+alt[0],e.y+alt[1])){ mx=alt[0]; my=alt[1]; }
+        else { mx=0; my=0; }
+      }
       move(e,mx,my);
     }
     // solid bodies - never share a space with a hero, never slip past one
     separate(e,player);
     for(const a of allies) if(!a.down) separate(e,a);   // monsters step over the fallen
     unstick(e);
+    { const mvx=e.x-(e.px===undefined?e.x:e.px), mvy=e.y-(e.py===undefined?e.y:e.py);   // eight-way facing from the step taken
+      if(Math.abs(mvx)+Math.abs(mvy)>0.05){ e.face=dirFromVec(mvx,mvy); e.walk=(e.walk||0)+1; e.movedAt=frame; }
+      else if(!e.face){ e.face=dirFromVec(ddx,ddy); }
+      e.px=e.x; e.py=e.y; }
 
     if(e.shootCd>0) e.shootCd--;
-    const thrower = e.kind==='demon'||e.kind==='goblin'||e.kind==='skeleton';   // lords fire from bossStalk
-    if(thrower && e.shootCd<=0){
-      const range = e.kind==='boss'?260 : e.kind==='skeleton'?220 : e.kind==='goblin'?180 : 200;
+    const RG=RANGED[e.kind];                        // lords fire from bossStalk
+    if(RG && e.shootCd<=0){
       const dd=Math.hypot(ddx,ddy);
-      if(dd<range && dd>26){
-        e.shootCd = e.kind==='boss'?70 : e.kind==='goblin'?120 : e.kind==='skeleton'?95 : 150;
-        monsterFire(e,tgt, e.kind==='goblin'?'spear' : e.kind==='skeleton'?'shuriken' : 'bolt');
-      }
+      if(dd<RG.range && dd>26){ e.shootCd=RG.cd; monsterFire(e,tgt,RG.k); }
     }
     if(frame%(e.kind==='zombie'?16:9)===0) e.frame^=1;
     if(e.hurt>0) e.hurt--;
@@ -3620,6 +4244,13 @@ function update(){
     if(it.t==='door' && (Math.abs(player.x-cx)>15 && Math.abs(player.y-cy)>15)) continue; // no diagonal unlocks
     if(it.t==='treasure'){ score+=100; items.splice(i,1); boom(cx,cy,C.yel); beep(880,0.1,'square',0.05); }
     else if(it.t==='food'){ player.hp=Math.min(player.maxHp,player.hp+100); items.splice(i,1); beep(520,0.12,'sine',0.06); }
+    else if(it.t==='heal'){                        // the golden draught goes in the hotbar, for when it is needed
+      if(countOf('heal')>=HEAL_MAX) continue;
+      if(!addToHotbar('heal')) continue;
+      items.splice(i,1); beep(660,0.1,'sine',0.06); beep(990,0.14,'sine',0.05);
+      const slot=hotbar.findIndex(sl=>sl&&sl.t==='heal')+1;
+      showMsg('GOLDEN DRAUGHT','slot '+slot+' - G to drink: the whole company to full');
+    }
     else if(it.t==='potion'){
       if(!addToHotbar('potion')) continue;        // hotbar full: it stays put
       items.splice(i,1); beep(740,0.12,'sine',0.06);
@@ -3868,7 +4499,7 @@ function stepToward(e,dx,dy,sp){
   move(e,mx,my);
 }
 function updateOneAlly(a){
-  if(a.down){ recoverDown(a); return; }            // flat out: no steps, no shots
+  if(a.down) recoverDown(a);                       // out cold: still walks with the company, fights not at all
   /* Three seconds out of shot and a follower is recovered - but not by dumping
      them on top of the leader. They come back to the nearest free spot that is
      actually on screen, which keeps them roughly where they were and simply
@@ -3913,11 +4544,12 @@ function updateOneAlly(a){
     const mvx=a.x-bx, mvy=a.y-by;
     if(Math.abs(mvx)>Math.abs(mvy)){ if(mvx) a.dir = mvx<0?'left':'right'; }
     else if(mvy) a.dir = mvy<0?'up':'down';
+    if(Math.abs(mvx)+Math.abs(mvy)>0.05){ a.face=dirFromVec(mvx,mvy); a.walk=(a.walk||0)+1; a.movedAt=frame; }
     if(frame%8===0) a.frame^=1;
   }
   separate(a,player);
   for(const o of allies) if(o!==a) separate(a,o);   // and out of each other's way
-  bodySlam(a);                                      // swordsmen and beasts barge
+  if(!a.down) bodySlam(a);                          // swordsmen and beasts barge
   unstick(a);
   if(a.member) a.member.hp=a.hp;                    // keep the succession record fresh
   // pick a target and fight
@@ -3930,10 +4562,10 @@ function updateOneAlly(a){
   a.dir = spriteDir(a.aim);
   const acd=Math.max(6,Math.round(26*((a.member&&a.member.rate)||1)));
   if(isMelee(a)){
-    if(a.cool<=0 && targetInReach(a)){ a.cool=acd; meleeSwing(a); }
+    if(!a.down && a.cool<=0 && targetInReach(a)){ a.cool=acd; meleeSwing(a); }
   } else {
     const lock=autoAim(a,160);
-    if(a.cool<=0 && lock){ a.cool=acd; fire(a,lock); }
+    if(!a.down && a.cool<=0 && lock){ a.cool=acd; fire(a,lock); }
   }
 }
 /* ==========================================================================
@@ -3964,6 +4596,7 @@ function recoverDown(a){                              // called every frame whil
 function hurtAlly(a,n){
   if(!a||a.down) return;
   if(a.member&&a.member.super) return;              // supercharged takes nothing
+  n=Math.round(n*(1-0.1*(up.ward||0)));             // Bulwark absorbs a share
   a.hp-=n;
   if(a.member) a.member.hp=a.hp;
   if(a.hp<=0) knockOut(a);
@@ -4012,6 +4645,7 @@ function tryCleric(){
 function hurt(n,silent){
   if(player.shield>0) return;                   // spawn shield soaks everything
   if(party[0]&&party[0].super) return;          // supercharged: nothing touches them
+  n=Math.round(n*(1-0.1*(up.ward||0)));         // Bulwark absorbs a share
   player.hp-=n;
   party[0].hp=player.hp;
   if(!silent&&frame%6===0) beep(140,0.06,'sawtooth',0.05);
@@ -4092,6 +4726,36 @@ function endRun(fallenCls){
 
 /* -------------------------------------------------------------------- draw */
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+/* ==========================================================================
+   CHANGE OF LEADER
+   Click any follower on the floor and you become them. The two swap places
+   in the succession and on the floor; score, gold, keys, cards and the
+   hotbar all stay, because they belong to the run, not to the champion.
+   ========================================================================== */
+function switchLeader(a){
+  if(!a||!a.member||mode!=='play'||dead) return;
+  if(a.down){ showMsg(HERO[a.cls].name.toUpperCase()+' IS OUT COLD','choose someone on their feet'); return; }
+  const m=a.member, old=party[0], i=party.indexOf(m);
+  if(i<0) return;
+  party[0]=m; party[i]=old;                         // swap in the succession
+  old.hp=player.hp; old.maxHp=player.maxHp;         // the old leader's health goes with them
+  const lx=player.x, ly=player.y;
+  player.cls=m.cls; player.maxHp=m.maxHp; player.hp=m.hp;
+  player.x=a.x; player.y=a.y; player.face=a.face||player.face; player.cool=0; player.swing=0; hudHero=null;
+  a.cls=old.cls; a.member=old; a.hp=old.hp; a.maxHp=old.maxHp; a.x=lx; a.y=ly; a.cool=ri(20);
+  unstick(player); unstick(a);
+  showMsg(HERO[m.cls].name.toUpperCase()+' TAKES THE LEAD', HERO[old.cls].name+' falls in behind');
+  beep(520,0.08,'square',0.05); beep(780,0.12,'sine',0.05);
+}
+cv.addEventListener('mousedown',ev=>{
+  if(mode!=='play'||!player) return;
+  const r=cv.getBoundingClientRect();
+  const sx=(ev.clientX-r.left)*(cv.width/r.width), sy=(ev.clientY-r.top)*(cv.height/r.height);
+  const wx=sx/ZOOM+camX, wy=sy/ZOOM+camY;           // screen to world
+  let best=null, bd=18;
+  for(const a of allies){ const d=Math.hypot(a.x-wx,a.y-wy); if(d<bd){ bd=d; best=a; } }
+  if(best){ switchLeader(best); ev.preventDefault(); }
+});
 ctx.imageSmoothingEnabled=false;
 const lctx=document.getElementById('lives').getContext('2d');
 const elScore=document.getElementById('score'), elHealth=document.getElementById('health'),
@@ -4193,6 +4857,13 @@ function draw(){
   ctx.setTransform(ZOOM,0,0,ZOOM,-Math.round(camX*ZOOM),-Math.round(camY*ZOOM));
   ctx.drawImage(staticCv,0,0);
 
+  if(crack){                                      // a jagged split down the wall, with a glint inside
+    const x=crack.tx*TILE, y=crack.ty*TILE;
+    ctx.fillStyle='#0a0a0e';
+    ctx.fillRect(x+9,y+1,2,4); ctx.fillRect(x+10,y+5,2,4); ctx.fillRect(x+8,y+8,3,4); ctx.fillRect(x+10,y+12,2,4); ctx.fillRect(x+9,y+16,2,3);
+    ctx.fillRect(x+7,y+10,2,1); ctx.fillRect(x+12,y+6,2,1); ctx.fillRect(x+12,y+13,2,1);
+    if(((frame>>4)&3)===0){ ctx.fillStyle=C.yel; ctx.fillRect(x+10,y+9,1,2); }
+  }
   for(const it of items){
     const x=it.tx*TILE, y=it.ty*TILE;
     if(it.t==='exit'){
@@ -4231,8 +4902,11 @@ function draw(){
     if(e.kind==='boss'){                                       // sized by its bulk
       const w=BOSS_PX, bx=Math.round(e.x)-w/2, by=Math.round(e.y)-w/2;
       const set=(BOSS_SPR[e.bi]&&BOSS_SPR[e.bi][e.cyc||0])||[SPR.demon[0],SPR.demon[1]];
+      const moving=(frame-(e.movedAt||-99))<3;
+      const bimg = set.f8 ? set.f8[FACE_IDX[e.face||'down']||0][moving ? ((e.walk||0)>>3)&3 : 1] : set[e.frame];
+      castShadow(bimg,e.x,e.y,w/2,w/bimg.width);
       ctx.globalAlpha = e.hurt>0?0.6:1;
-      ctx.drawImage(set[e.frame],bx,by,w,w);
+      ctx.drawImage(bimg,bx,by,w,w);
       ctx.globalAlpha=1;
       ctx.fillStyle='#000';    ctx.fillRect(bx-1,by-7,w+2,5);  // health bar
       ctx.fillStyle=C.redD;    ctx.fillRect(bx,by-6,w,3);
@@ -4242,9 +4916,15 @@ function draw(){
     const set = e.kind==='ghost'?SPR.ghost : e.kind==='demon'?SPR.demon
               : e.kind==='goblin'?SPR.goblin : e.kind==='zombie'?SPR.zombie
               : e.kind==='skeleton'?SPR.skeleton : SPR.grunt;
-    const img = set[e.frame];
-    ctx.globalAlpha = e.hurt>0 ? 0.55 : (e.kind==='ghost'?0.88:1);
-    ctx.drawImage(img,Math.round(e.x)-ACT_H,Math.round(e.y)-ACT_H);
+    let img = set[e.frame], half=ACT_H;
+    if(MSPR[e.kind]){                                          // the new eight-way monsters
+      const moving=(frame-(e.movedAt||-99))<3;
+      img=MSPR[e.kind].f8[FACE_IDX[e.face||'down']||0][moving ? ((e.walk||0)>>3)&3 : 1]; half=HUM_H;
+    }
+    const ghostly = e.kind==='ghost'||e.kind==='blackghost';
+    if(!ghostly) castShadow(img,e.x,e.y,half);                 // a ghost throws none
+    ctx.globalAlpha = e.hurt>0 ? 0.55 : (ghostly?0.88:1);
+    ctx.drawImage(img,Math.round(e.x)-half,Math.round(e.y)-half);
     if(frozenT>0){                                  // rimed over while held
       ctx.globalAlpha=0.34+0.12*Math.sin(frame/8);
       ctx.fillStyle='#9ad8ff';
@@ -4260,27 +4940,36 @@ function draw(){
       ctx.globalAlpha=0.35; ctx.fillStyle=C.yel;
       ctx.fillRect(Math.round(prisoner.x)-ACT_H,Math.round(prisoner.y)-ACT_H,ACT,ACT); ctx.globalAlpha=1;
     }
-    ctx.drawImage(HSPR[prisoner.cls].down[prisoner.frame],
-                  Math.round(prisoner.x)-ACT_H,Math.round(prisoner.y)-ACT_H);
+    { const pim=HSPR[prisoner.cls].down[prisoner.frame], ph=HSPR[prisoner.cls].hum?HUM_H:ACT_H;
+      castShadow(pim,prisoner.x,prisoner.y,ph);
+      ctx.drawImage(pim,Math.round(prisoner.x)-ph,Math.round(prisoner.y)-ph); }
   }
   for(const a of allies){
-    if(a.down){                                   // out cold: on their side, with a recovery bar
-      const ax=Math.round(a.x), ay=Math.round(a.y);
-      ctx.save(); ctx.translate(ax,ay+6); ctx.rotate(-Math.PI/2); ctx.globalAlpha=0.8;
-      ctx.drawImage(HSPR[a.cls].down[0],-ACT_H,-ACT_H); ctx.restore();
+    if(a.down){                                   // out cold: walks along as a shade, with a recovery bar
+      ctx.globalAlpha=0.32; drawHero(a); ctx.globalAlpha=1;
+      const ax=Math.round(a.x), ay=Math.round(a.y), hh=(HSPR[a.cls]&&HSPR[a.cls].hum)?HUM_H:ACT_H;
       const w=16, f=Math.round(w*Math.min(1,a.downT/DOWN_FRAMES));
-      ctx.fillStyle='#000'; ctx.fillRect(ax-8,ay+12,w,3);
-      ctx.fillStyle='#39d353'; ctx.fillRect(ax-8,ay+12,f,3);
-      if((frame>>4)&1){ ctx.fillStyle=C.wht; ctx.font='7px monospace'; ctx.fillText('z',ax+6,ay-8); }
+      ctx.fillStyle='#000'; ctx.fillRect(ax-w/2-1,ay-hh-4,w+2,4);
+      ctx.fillStyle='#2a0c10'; ctx.fillRect(ax-w/2,ay-hh-3,w,2);
+      ctx.fillStyle='#9ad8ff'; ctx.fillRect(ax-w/2,ay-hh-3,f,2);
+      if((frame>>4)&1){ ctx.fillStyle=C.wht; ctx.font='7px monospace'; ctx.fillText('z',ax+8,ay-hh-6); }
       continue;
     }
     drawSwing(a);
     if(a.member&&a.member.super) superGlow(a.x,a.y);
-    ctx.drawImage(HSPR[a.cls][a.dir][a.frame],Math.round(a.x)-ACT_H,Math.round(a.y)-ACT_H);
+    drawHero(a);
+    { /* a health bar over every follower's head, coloured by how much is left */
+      const ax=Math.round(a.x), ay=Math.round(a.y), hh=(HSPR[a.cls]&&HSPR[a.cls].hum)?HUM_H:ACT_H;
+      const frac=Math.max(0,Math.min(1,a.hp/a.maxHp)), w=14;
+      ctx.fillStyle='#000'; ctx.fillRect(ax-w/2-1,ay-hh-4,w+2,4);
+      ctx.fillStyle='#2a0c10'; ctx.fillRect(ax-w/2,ay-hh-3,w,2);
+      ctx.fillStyle = frac>0.5?'#39d24a' : frac>0.25?'#ffd23c' : '#c81830';
+      ctx.fillRect(ax-w/2,ay-hh-3,Math.round(w*frac),2);
+    }
   }
   if(party[0]&&party[0].super) superGlow(player.x,player.y);
   drawSwing(player);
-  ctx.drawImage(HSPR[player.cls][player.dir][player.frame],Math.round(player.x)-ACT_H,Math.round(player.y)-ACT_H);
+  drawHero(player);
 
   const wa=wardAlpha();
   if(wa>0) for(let i=0;i<up.orbs;i++){
@@ -4307,6 +4996,12 @@ function draw(){
   }
   drawEffects();
   for(const b of eshots){
+    const bx=Math.round(b.x), by=Math.round(b.y);
+    if(b.kind==='acid'){ pxDisc(ctx,bx,by,5,'#4a9a2a'); pxDisc(ctx,bx-1,by-1,3,'#8cf07a'); if((frame>>2)&1) ctx.fillRect(bx+3,by+2,2,2); continue; }
+    if(b.kind==='ecto'){ ctx.globalAlpha=0.75; pxDisc(ctx,bx,by,6,'#8cf07a'); pxDisc(ctx,bx-1,by-1,3,'#e8ffe8'); ctx.globalAlpha=1; continue; }
+    if(b.kind==='web'){ pxRing(ctx,bx,by,6,C.wht); ctx.fillStyle=C.wht; ctx.fillRect(bx-6,by,13,1); ctx.fillRect(bx,by-6,1,13); ctx.fillRect(bx-4,by-4,1,1); ctx.fillRect(bx+4,by+4,1,1); ctx.fillRect(bx-4,by+4,1,1); ctx.fillRect(bx+4,by-4,1,1); continue; }
+    if(b.kind==='ball'){ const pu=(frame>>1)&1; pxDisc(ctx,bx,by,7,'#e04a10'); pxDisc(ctx,bx,by,pu?5:4,'#ff9a2a'); pxDisc(ctx,bx-1,by-1,2,'#ffe060'); continue; }
+    if(b.kind==='axe'){ ctx.save(); ctx.translate(bx,by); ctx.rotate((frame%8)*Math.PI/4); ctx.fillStyle='#5a3a1a'; ctx.fillRect(-1,-7,2,14); ctx.fillStyle='#c8c8d8'; ctx.fillRect(-5,-7,10,4); ctx.restore(); continue; }
     if(b.kind==='orb'){                           // a lord's orb: big, and it pulses
       const sz=Math.round(20*(1.5+0.3*Math.sin(frame/3)));
       ctx.globalAlpha=0.5; ctx.drawImage(SPR.eshot,Math.round(b.x)-sz/2,Math.round(b.y)-sz/2,sz,sz);
@@ -4663,7 +5358,7 @@ function drawSheet(){
       BOSS_SPR[bi].forEach((cyc,c)=>{ ctx.drawImage(cyc[0],12+(k%6)*90,204+((k/6)|0)*96,84,84); k++; });
     });
     label('items and pickups',12,410);
-    ['orb','coin','key','keySilver','keyRed','potion','elixir','tonic','hoard','feast','relic','super']
+    ['orb','coin','key','keySilver','keyRed','potion','elixir','heal','tonic','hoard','feast','relic','super']
       .forEach((n,i)=>{ if(SPR[n]) ctx.drawImage(SPR[n],12+i*44,418,40,40); });
     label('bolts and thrown things',12,476);
     [SPR.eshot,SPR.bomb,SPR.ward,SPR.flame[0],SPR.axeThrown[0],SPR.axeThrown[1],SPR.shot8.right]

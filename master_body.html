@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Master humanoid body</title>
+<style>
+  body{background:#141420;color:#d8d8e8;font:14px/1.4 system-ui,sans-serif;margin:0;padding:18px 22px}
+  h1{font:700 18px system-ui;margin:0 0 4px;color:#ffd23c} h2{font:600 13px system-ui;margin:22px 0 6px;color:#9ad8ff;letter-spacing:.06em;text-transform:uppercase}
+  h3{font:600 12px monospace;margin:14px 0 4px;color:#d8d8e8}
+  p{margin:4px 0 10px;color:#a8a8c0;max-width:900px}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#1d1d2c}
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .cell{text-align:center;font:11px monospace;color:#8a8aa0}
+  .ctl{display:flex;gap:18px;align-items:center;margin:8px 0 12px;font:12px monospace}
+  .ctl label{display:flex;gap:6px;align-items:center}
+  #floor{background:#2a2438}
+  .cls{margin-bottom:10px}
+</style></head><body>
+<h1>Master humanoid body</h1>
+<p>One skeleton, projected into the arcade's top-down three-quarter view. Every facing is computed from the same
+body turned in place, so nothing is mirrored and the weapon stays in the right hand all the way round.
+Headgear and weapons are parts of the same skeleton, so a helmet's nose guard, a hat's brim and a bow all turn with the body.
+32px cell, drawn here at 4x (the game draws at 2x).</p>
+<div class="ctl">
+  <label><input type="checkbox" id="oOutline" checked> outline</label>
+  <label><input type="checkbox" id="oEmboss" checked> top-left light</label>
+  <label><input type="checkbox" id="oShadow" checked> ground shadow</label>
+  <label>walk speed <input type="range" id="oSpeed" min="2" max="14" value="7"></label>
+  <label><input type="checkbox" id="oGrid"> pixel grid</label>
+</div>
+
+<h2>Master body - sheet, 8 facings x 4 frames (contact, pass, contact, pass)</h2>
+<div class="row" id="sheet"></div>
+
+<h2>Master body in motion</h2>
+<div class="row" id="anim"></div>
+
+<h2>Classes on the master body - each walking through all eight facings</h2>
+<div id="classes"></div>
+
+<h2>Enemies on the master body</h2>
+<div id="enemies"></div>
+
+<h2>Beasts - chunky and squat, each walking through all eight facings</h2>
+<div id="beasts"></div>
+
+<h2>Walking the compass</h2>
+<canvas id="floor" width="720" height="300"></canvas>
+
+<script>
+/* ============================ the game's DSL, verbatim ============================ */
+const C={ blk:'#000000', wht:'#ffffff', bone:'#e8e0d0' };
+function Grid(w,h){ this.w=w; this.h=h; this.d=new Array(w*h).fill(null); }
+Grid.prototype.set=function(x,y,c){ x|=0;y|=0; if(c&&x>=0&&y>=0&&x<this.w&&y<this.h) this.d[y*this.w+x]=c; };
+Grid.prototype.get=function(x,y){ if(x<0||y<0||x>=this.w||y>=this.h) return null; return this.d[y*this.w+x]; };
+Grid.prototype.rect=function(x,y,w,h,c){ for(let j=0;j<h;j++) for(let i=0;i<w;i++) this.set(x+i,y+j,c); return this; };
+Grid.prototype.ell=function(cx,cy,rx,ry,c){
+  for(let y=Math.floor(cy-ry);y<=Math.ceil(cy+ry);y++)
+    for(let x=Math.floor(cx-rx);x<=Math.ceil(cx+rx);x++){
+      const a=(x+0.5-cx)/rx, b=(y+0.5-cy)/ry;
+      if(a*a+b*b<=1.02) this.set(x,y,c);
+    }
+  return this;
+};
+Grid.prototype.px=function(x,y,c){ this.set(x,y,c); return this; };
+Grid.prototype.outline=function(c){
+  c=c||C.blk; const out=[];
+  for(let y=0;y<this.h;y++) for(let x=0;x<this.w;x++){
+    if(this.get(x,y)) continue;
+    if(this.get(x-1,y)||this.get(x+1,y)||this.get(x,y-1)||this.get(x,y+1)) out.push([x,y]);
+  }
+  out.forEach(p=>this.set(p[0],p[1],c)); return this;
+};
+Grid.prototype.emboss=function(amt){
+  amt=amt||34; const src=this.d.slice();
+  for(let y=0;y<this.h;y++) for(let x=0;x<this.w;x++){
+    const c=src[y*this.w+x]; if(!c||c===C.blk||c===SHADOW) continue;
+    const up=(y>0)?src[(y-1)*this.w+x]:null;
+    const lf=(x>0)?src[y*this.w+x-1]:null;
+    if((!up||up===C.blk)||(!lf||lf===C.blk)) this.set(x,y,shade(c,amt));
+  }
+  return this;
+};
+function shade(hex,amt){
+  const r=parseInt(hex.substr(1,2),16), g=parseInt(hex.substr(3,2),16), b=parseInt(hex.substr(5,2),16);
+  const k=Math.min(1,Math.abs(amt)/255)*1.6;
+  const f = amt>=0 ? (v=>Math.min(255,Math.round(v+(255-v)*k)))
+                   : (v=>Math.max(0,Math.round(v*(1-k))));
+  return '#'+[f(r),f(g),f(b)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function bake(g){
+  const cv=document.createElement('canvas'); cv.width=g.w; cv.height=g.h;
+  const x=cv.getContext('2d');
+  for(let y=0;y<g.h;y++) for(let i=0;i<g.w;i++){ const c=g.get(i,y); if(c){ x.fillStyle=c; x.fillRect(i,y,1,1);} }
+  return cv;
+}
+
+/* ============================ the master body ============================
+   Body space: r = the figure's own right, d = the way it faces, z = up.
+   The camera looks down at the floor from the south at about 60 degrees, so
+   depth (d and r on the floor) is squashed to half and height is not.
+   FACING 0 is south (toward the camera), then clockwise: SW, W, NW, N, NE, E, SE. */
+const CELL=32, SHADOW='#0c0c14';
+const FACING_NAMES=['S','SW','W','NW','N','NE','E','SE'];
+const FACING_VEC=[[0,1],[-.7071,.7071],[-1,0],[-.7071,-.7071],[0,-1],[.7071,-.7071],[1,0],[.7071,.7071]];
+
+/* a thick line of solid pixels between two points */
+function line(g,x0,y0,x1,y1,w,c){
+  const n=Math.max(1,Math.ceil(Math.max(Math.abs(x1-x0),Math.abs(y1-y0))*2));
+  for(let i=0;i<=n;i++){
+    const t=i/n, x=x0+(x1-x0)*t, y=y0+(y1-y0)*t;
+    if(w<=1) g.px(x,y,c); else g.ell(x,y,w/2,w/2,c);
+  }
+}
+
+function humanoidFrame(f,phase,kit,opt){
+  opt=opt||{};
+  const g=new Grid(CELL,CELL);
+  const d=FACING_VEC[f], r=[-d[1],d[0]];              // right-hand side, on the floor
+  const OX=16, OY=30;                                   // where the feet meet the floor
+  const P=(xr,yd,z)=>[OX + xr*r[0] + yd*d[0], OY + (xr*r[1] + yd*d[1])*0.5 - z];
+  const depth=(xr,yd)=>xr*r[1] + yd*d[1];               // bigger = nearer the camera
+  const parts=[];
+  const add=(dep,fn)=>parts.push({dep,fn});
+  const fx=d[0], fy=d[1]*0.5+0.5;                       // the facing as the camera sees it
+  const profile=Math.abs(d[1])<0.3;
+
+  /* the walk: contact frames have the legs apart, pass frames have them under the body and the body a pixel higher */
+  const K=[[ 3.6,-3.6,0],[0.6,-0.6,1],[-3.6,3.6,0],[-0.6,0.6,1]][phase];
+  const legL=K[0], legR=K[1], bob=K[2];
+  const armL=-legL*0.75, armR=-legR*0.75;               // arms swing against the legs
+
+  const skin=kit.skin, hair=kit.hair, tun=kit.tunic, tro=kit.trousers, boot=kit.boots, steel=kit.steel||'#d8d8e8';
+  const tunD=shade(tun,-34);
+  const head=kit.head||'hair', wpn=kit.weapon||'sword';
+  const bw = kit.slim ? 0.82 : kit.bulk ? 1.16 : kit.female ? 0.88 : 1;   // slim narrows the torso and shoulders, bulk broadens them
+
+  if(opt.shadow!==false){ const s=P(0,0,0); g.ell(s[0],s[1]+0.5,7,3,SHADOW); }
+
+  /* ---- legs: hip to foot, a 3px column, boot at the end */
+  const leg=(xr,swing)=>{
+    const hip=P(xr,0,9+bob), ft=P(xr,swing,0+bob);
+    add(kit.chest==='robe' ? -50 : depth(xr,swing*0.5), g2=>{   // under a robe the legs always go behind the hem
+      line(g2,hip[0],hip[1],ft[0],ft[1]-1,3,tro);
+      g2.ell(ft[0],ft[1]-0.5,2.6,1.6,boot);           // the boot, foreshortened
+      if(swing>1) g2.ell(ft[0]+d[0]*1.5,ft[1]+d[1]*0.75-0.5,1.8,1.2,shade(boot,20));   // toe cap forward
+    });
+  };
+  if(!kit.wraith){ leg(-3,legL); leg(3,legR); }         // a wraith has no legs: its robe goes to the floor
+
+  /* ---- torso: a rounded block, shoulders wider than the waist, belt at the hip */
+  add(0, g2=>{
+    for(let z=9;z<=16;z++){ const c=P(0,0,z+bob); const w=(5.2+ (z-9)*0.22)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+    const sh=P(0,0,16.5+bob); g2.ell(sh[0],sh[1],6.6*bw,3.4*bw,tun);   // shoulder cap seen from above
+    const bt=P(0,0,9+bob); g2.ell(bt[0],bt[1],5.3*bw,2.9*bw,tunD);      // belt
+    const bk=P(0,-3.2,13+bob); g2.ell(bk[0],bk[1],4.2,2.6,tunD);  // the back of the tunic is in shade
+    if(kit.chest==='plate'){ const pl=P(0,2.2,13.5+bob); g2.ell(pl[0],pl[1],4.4,3.4,steel); }
+    if(kit.chest==='robe'&&!kit.wraith){ for(let z=1;z<=9;z++){ const c=P(0,0,z+bob); const w=(5.2+(9-z)*0.28)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+                            const hm=P(0,0,1+bob); g2.ell(hm[0],hm[1],7.7*bw,4.2*bw,tunD); }
+    if(kit.wraith){          // a ghost's robe narrows to a wisp at the floor, as if risen out of the ground
+      const rip=[0,1,0,-1][phase];
+      for(let z=9;z>=1;z--){ const t=(9-z)/8; const c=P(rip*t*1.2,-t*0.8,z+bob); const w=(5.2-t*3.4)*bw; g2.ell(c[0],c[1],w,w*0.55,tun); }
+      for(const k of [-1,0,1]){ const q=P(k*1.4+rip*1.2,-1,0.3+bob); g2.ell(q[0],q[1]-(k?0:1),0.9,1.2,shade(tun,-14)); }   // three torn tips
+    }
+  });
+  if(kit.cape){                                       // a cape: hung from the shoulders, flaring and trailing behind, swaying with the stride.
+    add(depth(0,-4), g2=>{                            // its own part: behind everything facing south, over the back and legs facing north
+      const sway=[1.2,0,-1.2,0][phase], capeD=shade(kit.cape,-30);
+      const shoulders=P(0,-1.2,16+bob); g2.ell(shoulders[0],shoulders[1],6.2*bw,2.6,kit.cape);   // the collar across the shoulders
+      for(let z=15;z>=1;z--){ const t=(15-z)/14; const c=P(sway*t*1.3,-3.2-t*2.2,z+bob); const w=(4.2+t*2.6)*bw; g2.ell(c[0],c[1],w,w*0.5,t>0.8?capeD:kit.cape); }
+    });
+  }
+
+  /* ---- arms: from the shoulder, hanging to hip height, swinging; the right hand holds the weapon */
+  const arm=(xr,swing,right)=>{
+    if(kit.wraith){ swing=5.5+swing*0.4; }               // both hands out in front, grasping
+    const sh=P(xr,0,15.5+bob), hd=P(xr+0.6*Math.sign(xr),swing,kit.wraith?12+bob:8.5+bob);
+    add(depth(xr,swing*0.6), g2=>{
+      line(g2,sh[0],sh[1],hd[0],hd[1],3,tun);                       // sleeve
+      const handC=kit.hands||skin;
+      if(kit.wraith){                                                 // seeking hands: broad, fingers spread toward you
+        g2.ell(hd[0],hd[1],2.5,2,handC);
+        for(const k of [-1.2,0,1.2]){ const f=P(xr+0.6*Math.sign(xr)+k,swing+2.4,(kit.wraith?12:8.5)+bob); g2.ell(f[0],f[1],0.8,0.8,handC); }
+      } else g2.ell(hd[0],hd[1],1.9,1.6,handC);                       // hand
+      const hx=xr+0.6*Math.sign(xr);
+      if(right) weaponAt(g2,wpn,hx,swing,8.5+bob);
+      else if(kit.offhand) offhandAt(g2,kit.offhand,hx,swing,8.5+bob);
+    });
+  };
+  /* weapons are body-space too: they are what proves the facing */
+  const weaponAt=(g2,w,hx,hy,hz)=>{
+    const H=P(hx,hy,hz);
+    const stick=(len,zr,col,wd)=>{ const t=P(hx,hy+len,hz+zr); line(g2,H[0],H[1]-0.5,t[0],t[1],wd||2,col); return t; };
+    const pole=(len,col)=>{ const t=P(hx,hy+1.5,hz+len); line(g2,H[0],H[1],t[0],t[1],2,col); return t; };
+    if(w==='sword'){ stick(10,1,steel); const gd=P(hx,hy+2,hz+1); g2.ell(gd[0],gd[1],1.8,1.4,shade(steel,-60)); }
+    if(w==='dagger'){ stick(5,0.5,steel); }
+    if(w==='axe'){ const t=stick(8,1.5,shade(boot,10)); g2.ell(t[0],t[1],3,2.4,steel); const e=P(hx,hy+8,hz+3.5); g2.ell(e[0],e[1],2.2,1.6,steel); }
+    if(w==='mace'){ const t=stick(7,1,shade(boot,10)); g2.ell(t[0],t[1],2.6,2.4,steel); }
+    if(w==='spear'){ const t=pole(19,shade(boot,10)); g2.ell(t[0],t[1]-1,1.4,2.2,steel); }
+    if(w==='staff'){ const t=pole(20,shade(boot,-10)); g2.ell(t[0],t[1]-1,2.2,2.2,kit.gem||'#9ad8ff'); }
+    if(w==='bow'){ const top=P(hx,hy,hz+9), bot=P(hx,hy,hz-6), mid=P(hx,hy+3.2,hz+1.5);   // upright: straight string between the tips,
+                   line(g2,top[0],top[1],bot[0],bot[1],1,C.bone);                            // the stave bowing forward toward the target
+                   line(g2,top[0],top[1],mid[0],mid[1],2,shade(boot,20)); line(g2,mid[0],mid[1],bot[0],bot[1],2,shade(boot,20)); }
+    if(w==='wand'){ stick(6,2,shade(boot,-10),1); const t=P(hx,hy+6,hz+2); g2.px(t[0],t[1],kit.gem||'#ff6a44'); }
+  };
+  const offhandAt=(g2,o,hx,hy,hz)=>{
+    if(o==='shield'){ const s=P(hx-1.5,hy+1,hz+3); g2.ell(s[0],s[1],3.2,4,kit.shield||steel); const b=P(hx-1.5,hy+1,hz+3); g2.ell(b[0],b[1],1.2,1.4,shade(kit.shield||steel,-50)); }
+    if(o==='book'){ const b=P(hx,hy+1,hz+1); g2.ell(b[0],b[1],2.4,1.8,kit.book||'#6e0f06'); }
+    if(o==='torch'){ const t=P(hx,hy+1,hz+7); line(g2,P(hx,hy,hz)[0],P(hx,hy,hz)[1],t[0],t[1],1,shade(boot,10)); g2.ell(t[0],t[1]-1,1.6,2,'#ff9a2a'); }
+  };
+  arm(-7*bw,armL,false); arm(7*bw,armR,true);
+
+  /* ---- long hair, for the women: a fall down the back from crown to shoulder blades,
+          its own part so it hides behind the head from the south and drapes over the
+          shoulders from the north, showing either side of the neck in between */
+  if(kit.female && head!=='fullhelm' && !(head==='hood'||head==='skullhood')){
+    add(depth(0,-2.4), g2=>{
+      for(let z=20;z>=12;z-=1){ const p=P(0,-2.4-(20-z)*0.12,z+bob); const w=2.2+(20-z)*0.16; g2.ell(p[0],p[1],w,w*0.7,hair); }
+      const t=P(0,-3.2,12+bob); g2.ell(t[0],t[1],2.6,1.4,shade(hair,-25));   // the ends, in shadow
+    });
+  }
+  /* ---- head: a ball with hair or headgear over its back half, eyes on the front */
+  add(0.01, g2=>{
+    const nk=P(0,0,17.2+bob); g2.ell(nk[0],nk[1],2.2,1.4,shade(skin,-22));   // a neck between collar and jaw
+    const h=P(0,0,21.5+bob), RX=profile?4.7:5.4, RY=5;
+    const onHead=(x,y)=>{ const nx=(Math.floor(x)+0.5-h[0])/RX, ny=(Math.floor(y)+0.5-h[1])/RY; return nx*nx+ny*ny<=0.9; };
+    const hooded = head==='hood'||head==='skullhood';
+    if(hooded){ g2.ell(h[0],h[1]+0.5,RX+1.3,RY+1.2,shade(kit.cloth||tun,-20)); }           // the cowl, a size up from the skull
+    const bony = head==='skullhood'||head==='skull';
+    g2.ell(h[0],h[1],RX,RY, bony?(kit.bone||C.bone):skin);
+    /* The cap - hair, helmet or hood - is painted onto the skull pixels whose
+       surface faces away from the camera and the facing; the face is the rest.
+       From the south the cap covers the top third, from the north the whole
+       head, in profile the back half and the crown. */
+    const isHelm = head==='helm'||head==='hornhelm'||head==='winghelm'||head==='fullhelm';
+    const helmCol = shade(steel,-22);                                   // helmets a shade darker than the blade
+    const capCol = (head==='hair'||head==='horns')?hair : isHelm?helmCol : hooded?(kit.cloth||tun) : head==='cap'?(kit.cloth||tun) : hair;
+    const capBias = head==='hair'?0.24 : hooded?0.10 : 0.22;
+    const CAP=[];
+    for(let y=Math.floor(h[1]-RY);y<=Math.ceil(h[1]+RY);y++)
+      for(let x=Math.floor(h[0]-RX);x<=Math.ceil(h[0]+RX);x++){
+        const nx=(x+0.5-h[0])/RX, ny=(y+0.5-h[1])/RY;
+        if(nx*nx+ny*ny>1.02) continue;
+        let edge=0.05;
+        if(head==='hair'){ edge += -0.12*fy*Math.abs(Math.cos((x+0.5-h[0])*1.9)) + 0.10*fy*nx;   // a ragged fringe, swept to one side
+                           if(fy>0.5 && Math.abs(nx)>0.76 && ny>-0.35 && ny<0.4){ g2.px(x,y,hair); CAP.push([x,y]); continue; } }  // sideburns
+        if(head==='skull') continue;                                       // bare bone, nothing on it
+        if(head==='fullhelm' || nx*fx+ny*fy+capBias*d[1]<edge){ g2.px(x,y,capCol); CAP.push([x,y]); }   // a full helm covers the whole skull
+      }
+    if(head==='hair'){                                   // tufts poke a pixel past the skull round the crown
+      for(let x=Math.floor(h[0]-RX);x<=Math.ceil(h[0]+RX);x++){
+        const nx=(x+0.5-h[0])/RX; if(Math.abs(nx)>0.92) continue;
+        const top=Math.floor(h[1]-RY*Math.sqrt(1-nx*nx)+0.5);
+        if(((x*7+3)%5)<2 && g2.get(x,top)===hair) g2.px(x,top-1,hair);
+      }
+    }
+    if(head==='helm'||head==='winghelm'){
+      const rim=P(0,0,20.5+bob); for(let a=0;a<Math.PI*2;a+=0.25){ const px=rim[0]+Math.cos(a)*RX*0.98, py=rim[1]+Math.sin(a)*RY*0.98*0.55+1.2; if(py>h[1]-1) g2.px(px,py,shade(steel,-55)); }   // the brow band
+      if(fy>0.55){ const n0=P(0,4.2,22+bob), n1=P(0,4.6,18.5+bob); line(g2,n0[0],n0[1],n1[0],n1[1],1,shade(steel,-40)); }  // nose guard
+    }
+    if(head==='fullhelm'){                                // the whole head in steel, a dark visor slit for a face
+      const slot=shade(steel,-150);
+      const near=depth(0,4.3);                            // how squarely the visor faces the camera
+      if(near>-0.5){
+        const sx = Math.min(2.6, 2.6*Math.max(0.35,(near+0.5)/4.8));   // the slit foreshortens as the head turns
+        const a=P(-sx,4.3,21.4+bob), b=P(sx,4.3,21.4+bob); line(g2,a[0],a[1],b[0],b[1],1,slot);   // eye slit
+        const c=P(0,4.5,20.6+bob), e=P(0,4.7,18.6+bob); line(g2,c[0],c[1],e[0],e[1],1,slot);        // breath slit
+        for(const sgn of [-1,1]){ const q=P(sgn*sx*0.55,4.35,21.4+bob); g2.px(q[0],q[1],'#ff6a44'); }   // eyes glint in the dark
+      }
+      const rim=P(0,0,19.2+bob); for(let a=0;a<Math.PI*2;a+=0.25){ const px=rim[0]+Math.cos(a)*RX*0.98, py=rim[1]+Math.sin(a)*RY*0.98*0.55+1.2; if(py>h[1]) g2.px(px,py,shade(steel,-60)); }   // the jaw rim
+    }
+    if(head==='hornhelm'||head==='horns'||(head==='fullhelm'&&kit.horns)){   // horns: body-space curls from the temples
+      for(const s of [-1,1]){ const a=P(s*5,0.5,22.5+bob), b=P(s*7.5,-0.5,26+bob), c=P(s*7,-1,28.5+bob);
+        line(g2,a[0],a[1],b[0],b[1],2,C.bone); line(g2,b[0],b[1],c[0],c[1],1,C.bone); }
+    }
+    if(head==='winghelm'){                                // valkyrie wings, sweeping back and up
+      for(const s of [-1,1]){ const a=P(s*5,0,23+bob), b=P(s*7,-3,26.5+bob), c=P(s*6,-6,29+bob);
+        line(g2,a[0],a[1],b[0],b[1],2,C.bone); line(g2,b[0],b[1],c[0],c[1],2,C.bone); const t=P(s*7.5,-4.5,25+bob); g2.px(t[0],t[1],C.bone); }
+    }
+    if(head==='wizard'){                                  // a tall cone with a brim, leaning back
+      const brim=P(0,0,23.3+bob); g2.ell(brim[0],brim[1],7.6,3.9,shade(kit.cloth||tun,-30));
+      for(let z=23.5;z<=30.5;z+=0.5){ const t=(z-23.5)/7; const c=P(0,-t*3.2,z+bob); const w=5.2*(1-t)+0.6; g2.ell(c[0],c[1],w,w*0.6,kit.cloth||tun); }
+      const band=P(0,0,24.2+bob); g2.ell(band[0],band[1]+0.3,5.1,2.9,shade(kit.cloth||tun,-45)); const bt=P(0,0,25+bob); g2.ell(bt[0],bt[1],4.6,2.6,kit.cloth||tun);
+    }
+    if(head==='cap'){ const bm=P(0,2.5,23.5+bob); g2.ell(bm[0],bm[1],3.2,1.4,shade(kit.cloth||tun,-30)); }   // a peak forward
+    if(head==='circlet'){                                 // only the near half of the band: the skull hides the rest
+      const rim=P(0,0,23+bob), gold=kit.gold||'#ffd23c';
+      for(let a=0;a<Math.PI*2;a+=0.2){ if(Math.sin(a)<-0.05) continue;
+        g2.px(rim[0]+Math.cos(a)*RX*0.92, rim[1]+Math.sin(a)*RY*0.92*0.55+0.6, Math.cos(a)>0.6?shade(gold,-40):gold); }
+    }
+    if(head==='skullhood'){ const j=P(0,3.5,19+bob); g2.rect(j[0]-2,j[1],4,1,shade(C.bone,-50)); }   // a tooth line
+    /* Eyes, per the reference sheet: two dark, muted dots on a ring round the
+       skull, 35 degrees either side of the facing. True body-space points, so
+       they slide round the head as the figure turns, the near one a pixel lower
+       on the diagonals, one at the front edge in profile, none from behind. */
+    if(head==='fullhelm') return;                          // the visor is the face
+    const base = bony?(kit.bone||C.bone):skin;
+    const EYE_A=kit.eyes?0.82:0.611, EYE_RHO=3.4, eyeCol=bony?'#2a0a0a':shade(base,-118), eyeFar=bony?'#4a1a1a':shade(base,-78);
+    for(const s of [-1,1]){
+      const xr=s*EYE_RHO*Math.sin(EYE_A), yd=EYE_RHO*Math.cos(EYE_A);
+      const ex=h[0]+xr*r[0]+yd*d[0], vis=depth(xr,yd);
+      const ey=h[1]+vis*0.5;
+      if(vis<-0.7) continue;
+      const ex0=Math.floor(ex), ey0=Math.floor(ey);
+      if(kit.eyes){                                                 // monsters: glowing eyes under a scowling brow
+        const glow=vis>=1.2?kit.eyes:shade(kit.eyes,-60);
+        const rows = kit.bigEyes ? [0,1] : [0];                     // big eyes are two rows deep
+        for(const rr of rows){ if(onHead(ex0,ey0+rr)) g2.px(ex0,ey0+rr,glow); if(onHead(ex0+s,ey0+rr)) g2.px(ex0+s,ey0+rr,glow); }
+        if(vis>=1.2){ g2.px(ex0,ey0-1,C.blk); g2.px(ex0+s,ey0-2,C.blk); g2.px(ex0+s,ey0-1,C.blk); }   // the brow slants down toward the nose
+        continue;
+      }
+      if(onHead(ex0,ey0)){ g2.px(ex0,ey0, vis>=1.2?eyeCol:eyeFar); if(bony&&vis>=1.2) g2.px(ex0,ey0-1,eyeFar); }
+    }
+  });
+
+  parts.sort((a,b)=>a.dep-b.dep).forEach(p=>p.fn(g));
+  if(opt.emboss!==false){ g.shadowSide(36); g.emboss(30); }   // lit from the top-left, like the walls
+  if(opt.outline!==false) g.outline();
+  return g;
+}
+/* The light comes from the top-left, the same as on the walls. Every colour
+   mass gets a two-pixel shadow band down its right side and underside: the
+   outermost pixel darkest, the next one half as dark. With emboss lighting the
+   top-left rim, each part reads as a rounded solid rather than a flat cut-out. */
+Grid.prototype.shadowSide=function(amt){
+  const src=this.d.slice(), W=this.w;
+  const solid=(x,y)=>{ const c=(x>=0&&y>=0&&x<W&&y<this.h)?src[y*W+x]:null; return c&&c!==C.blk&&c!==SHADOW; };
+  for(let y=0;y<this.h;y++) for(let x=0;x<W;x++){
+    const c=src[y*W+x]; if(!c||c===C.blk||c===SHADOW) continue;
+    if(!solid(x+1,y)||!solid(x,y+1)) this.set(x,y,shade(c,-amt));
+    else if(!solid(x+2,y)||!solid(x,y+2)) this.set(x,y,shade(c,-amt/2));
+  }
+  return this;
+};
+function buildHumanoid(kit,opt){
+  return FACING_NAMES.map((_,f)=>[0,1,2,3].map(k=>bake(humanoidFrame(f,k,kit,opt))));
+}
+
+/* ============================ the master quadruped ============================
+   Same body space and camera as the humanoid. A beast is a chain of spheres
+   along its spine - spheres project as discs whatever the facing, so the
+   barrel foreshortens correctly as it turns - with four short legs in a
+   diagonal gait, and a head, tail and features that are body-space parts.
+   Chunky and squat: belly low, legs a third of the body height. */
+function quadrupedFrame(f,phase,kit,opt){
+  opt=opt||{};
+  const g=new Grid(CELL,CELL);
+  const d=FACING_VEC[f], r=[-d[1],d[0]];
+  const OX=16, OY=29;
+  const P=(xr,yd,z)=>[OX + xr*r[0] + yd*d[0], OY + (xr*r[1] + yd*d[1])*0.5 - z];
+  const depth=(xr,yd)=>xr*r[1] + yd*d[1];
+  const parts=[]; const add=(dep,fn)=>parts.push({dep,fn});
+  const F=kit.feature, main=kit.main, light=kit.light||shade(main,30), dark=kit.dark||shade(main,-40);
+  const legC=kit.leg||shade(main,-18);                 // legs get their own colour so they survive the shading
+  const mainD=shade(main,-26);
+  /* diagonal gait: front-left with back-right, the other pair opposite; pass frames lift the body a pixel */
+  const S = {                                       // species proportions, body units - wide, low, legs clear of the belly
+    llama:{L:8,   R:4.2, zc:7,   hip:5.5, legW:3,   legX:4,   flat:0.9},
+    snout:{L:11,  R:4.4, zc:4.2, hip:3,   legW:3,   legX:5,   flat:0.6},
+    jaw:  {L:10,  R:5.6, zc:6.5, hip:4,   legW:4.5, legX:4.4, flat:0.82},
+    goat: {L:8.5, R:4.4, zc:6.2, hip:5,   legW:3,   legX:4,   flat:0.88},
+    trunk:{L:10.5,R:5.8, zc:6.5, hip:4.5, legW:4.5, legX:4.8, flat:0.88},
+    spider:{L:7,  R:3.4, zc:4.2, hip:4,   legW:2,   legX:4.6, flat:0.8}
+  }[F];
+  const amp = 1.4 + S.hip*0.22;                       // stride scales with leg length: a stumpy hippo steps short
+  const K=[[amp,0],[amp*0.2,1],[-amp,0],[-amp*0.2,1]][phase];
+  const sw=K[0], bob=K[1];
+  const blob=(g2,xr,yd,z,R,col,flat)=>{ const p=P(xr,yd,z+bob); g2.ell(p[0],p[1],R,R*(flat||0.85),col); };
+  const seg=(g2,a,b,w,col)=>{ const A=P(a[0],a[1],a[2]+bob), B=P(b[0],b[1],b[2]+bob); line(g2,A[0],A[1],B[0],B[1],w,col); };
+
+  if(opt.shadow!==false){ const s=P(0,0,0); g.ell(s[0],s[1]+0.5,S.L*0.42,S.R*0.42,SHADOW); }   // one flat pool, never wider than the feet
+
+  /* ---- legs: hip to foot, splayed a little, the diagonal pairs swinging against each other */
+  const leg=(xr,yd,swing)=>{
+    const frontal=Math.abs(d[1]);                     // 1 face-on, 0 broadside
+    const spread=1.05+0.28*frontal;                   // the arcade cheat: splay the feet a little wider when seen head-on
+    const hip=[xr,yd,S.hip], ft=[xr*spread,yd+swing,0];
+    add(depth(xr,yd+swing*0.5), g2=>{
+      seg(g2,hip,ft,S.legW,legC);
+      const p=P(ft[0],ft[1],bob); g2.ell(p[0],p[1]-0.3,S.legW*0.7+0.6,1.3,shade(legC,-30));   // a hoof or paw
+    });
+  };
+  const fy=S.L*0.36, bx=S.legX;
+  leg(-bx, fy, sw); leg(bx, fy, -sw); leg(-bx, -fy, -sw); leg(bx, -fy, sw);
+
+  /* ---- the barrel: a chain of spheres along the spine, fat in the middle */
+  for(let t=-S.L/2;t<=S.L/2;t+=1){
+    const u=Math.abs(t)/(S.L/2), R=S.R*(1-0.28*u*u);
+    add(depth(0,t), g2=>{ blob(g2,0,t,S.zc,R,main,S.flat); blob(g2,0,t,S.zc+R*0.35,R*0.62,light,S.flat); blob(g2,0,t,S.zc-R*0.45,R*0.7,mainD,S.flat); });
+  }
+
+  /* ---- species */
+  const n=S.L/2;                                              // the chest
+  if(F==='llama'){
+    for(let z=S.zc+1;z<=15;z+=1){ const t=n-0.5+(z-S.zc)*0.3; add(depth(0,t)+0.02, g2=>blob(g2,0,t,z,2,main)); }   // the neck
+    add(depth(0,n+2.6)+0.05, g2=>{ blob(g2,0,n+2.6,16.2,2.5,main); blob(g2,0,n+3.6,15.6,1.6,mainD);   // head and muzzle
+      seg(g2,[-1.5,n+2.2,17.5],[-2.2,n+1.5,20],1.6,main); seg(g2,[1.5,n+2.2,17.5],[2.2,n+1.5,20],1.6,main); });   // banana ears
+    add(depth(0,-n-0.5)-0.02, g2=>blob(g2,0,-n-0.8,S.zc+1.5,1.4,dark));                                            // tail
+  }
+  if(F==='snout'){
+    add(depth(0,n+1)+0.05, g2=>{ blob(g2,0,n+1,4.6,2.6,main,0.7); blob(g2,0,n+1,6.2,1.6,light,0.7); });          // low flat head
+    for(let t=1.5;t<=6;t+=1){ const R=2.1-t*0.16; add(depth(0,n+1+t)+0.06, g2=>{ blob(g2,0,n+1+t,4,R,main,0.65); blob(g2,0,n+1+t,3.2,R*0.9,mainD,0.6); }); }   // snout
+    add(depth(0,n+6.5)+0.07, g2=>{ for(const s of [-1,1]){ const p=P(s*1.4,n+4,3.4+bob); g2.px(p[0],p[1],C.bone); const q=P(s*1.1,n+6.5,3.4+bob); g2.px(q[0],q[1],C.bone); } });   // teeth
+    for(let t=1;t<=7;t+=1){ const R=2.2-t*0.22; add(depth(0,-n-t)-0.02, g2=>blob(g2,0,-n-t,3.8-t*0.15,R,main,0.65)); }   // long tapering tail
+    for(let t=-4;t<=4;t+=2) add(depth(0,t)+0.03, g2=>{ const p=P(0,t,S.zc+S.R*0.62+0.8+bob); g2.px(p[0],p[1],dark); });   // scutes
+  }
+  if(F==='jaw'){
+    add(depth(0,n+2)+0.05, g2=>{ blob(g2,0,n+2,8.2,3.9,main,0.85); blob(g2,0,n+1.5,9.8,2.4,light,0.8);                   // huge head
+      blob(g2,0,n+3.2,5.6,3.1,mainD,0.75);                                                                     // the jaw
+      for(const s of [-1,1]){ blob(g2,s*2.8,n+0.8,12,0.95,mainD); const t=P(s*2.2,n+6,5.2+bob); g2.px(t[0],t[1],C.bone); }   // ears, tusks
+      const m=P(0,n+6.1,6.6+bob); g2.rect(m[0]-2,m[1],4,1,shade(mainD,-40)); });                                // mouth line
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.6,S.zc+1,1.1,dark));
+  }
+  if(F==='goat'){
+    for(let z=S.zc+1;z<=13;z+=1){ const t=n-0.8+(z-S.zc)*0.4; add(depth(0,t)+0.02, g2=>blob(g2,0,t,z,1.9,main)); }    // the neck, held high
+    add(depth(0,n+2.4)+0.05, g2=>{ blob(g2,0,n+2.4,14.2,2.9,main);                                                     // head, up above the back
+      blob(g2,0,n+4.4,12.8,2,light); blob(g2,0,n+5.4,12,1.5,light);                                                   // the long muzzle, dropping forward
+      blob(g2,0,n+3.4,14.6,1.1,shade(light,10));                                                                       // a blaze down the face
+      blob(g2,0,n+2.6,16,1.7,mainD);                                                                                   // brow ridge under the horns
+      const nz=P(0,n+6.6,11.8+bob); g2.rect(nz[0]-1,nz[1],2,1,shade(dark,-30));                                       // nose
+      const mo=P(0,n+6,10.6+bob); g2.rect(mo[0]-1,mo[1],3,1,shade(main,-50));                                         // mouth line
+      seg(g2,[0,n+5.6,10.4],[0,n+5.2,8.6],1.3,light);                                                                   // beard
+      const sp=1+0.15*Math.abs(d[1]);                                                                                    // horns and ears splay a touch wider face-on
+      for(const s of [-1,1]){ seg(g2,[s*1.4*sp,n+2,16.2],[s*2.6*sp,n+0.2,18.6],1.6,C.bone); seg(g2,[s*2.6*sp,n+0.2,18.6],[s*3*sp,-0.6+n,17.4],1.2,C.bone);   // horns back and hooked
+                              seg(g2,[s*2.4*sp,n+2.4,14.6],[s*4.2*sp,n+2,15.2],1.5,main); } });                        // ears, out sideways
+    for(let t=-3;t<=3;t+=1) add(depth(0,t)+0.03, g2=>{ const p=P(0,t,S.zc+S.R*0.62+0.6+bob); g2.rect(p[0]-2,p[1],4,1,shade(main,-45)); });   // barding
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.8,S.zc+1.2,1.2,light));
+  }
+  if(F==='trunk'){
+    for(let t=-3;t<=1;t+=1) add(depth(0,t)+0.01, g2=>{ blob(g2,0,t,S.zc+3.2,3.6,main); blob(g2,0,t,S.zc+4.6,2.2,light); });   // the dome over the shoulders
+    add(depth(0,n+2)+0.05, g2=>{ blob(g2,0,n+2,9,3.4,main); blob(g2,0,n+1.8,10.4,2,light);                            // head
+      for(const s of [-1,1]){ blob(g2,s*3.6,n+1.2,9.8,1.7,mainD);                                                    // ears
+        seg(g2,[s*2.2,n+4.2,6.4],[s*3.6,n+8.4,5.4],2.4,C.bone); seg(g2,[s*3.6,n+8.4,5.4],[s*4.2,n+11.6,9],1.9,C.bone);   // tusks: out and down, then sweeping up
+        const tp=P(s*4.2,n+11.6,9+bob); g2.px(tp[0],tp[1],shade(C.bone,30)); } });
+    for(let z=7;z>=0.5;z-=1){ const t=n+4.6+(7-z)*0.22; add(depth(0,t)+0.06, g2=>blob(g2,0,t,z,1.3-(7-z)*0.04,dark)); }        // trunk, hanging
+    add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.7,S.zc+1.8,1,dark));
+  }
+
+  /* ---- eyes on the head sphere: the same ring rule as the humanoid, muted dark dots */
+  if(F==='spider'){
+    add(depth(0,-n-1.2)-0.03, g2=>{ blob(g2,0,-n-1.4,S.zc+1.2,4.4,main,0.85); blob(g2,0,-n-1.4,S.zc+2.6,2.4,light,0.8);   // the abdomen, big and round
+      const m=P(0,-n-1.4,S.zc+3.2+bob); g2.rect(m[0]-1,m[1],2,2,'#c02020'); });                                        // a red mark on its back
+    add(depth(0,n+1.2)+0.05, g2=>{ blob(g2,0,n+1.2,4.8,2.2,main,0.85);                                                  // a small head
+      for(const s of [-1,1]) seg(g2,[s*1.2,n+3,4],[s*1.8,n+4.6,3],1.2,dark); });                                        // fangs
+    for(const s of [-1,1]) for(const t of [-1.5,1.5]) add(depth(s*4,t)+0.02, g2=>seg(g2,[s*2.6,t,S.zc+1],[s*7,t*2.2,0.4],1.4,legC));   // four more legs, splayed
+  }
+  const H = {llama:[n+2.6,16.2,2.5], snout:[n+1,5.8,2.6], jaw:[n+2,9.4,3.9], goat:[n+2.4,14.2,2.9], trunk:[n+2,9.6,3.4], spider:[n+1.2,4.8,2.2]}[F];
+  add(depth(0,H[0])+0.2, g2=>{
+    const hc=P(0,H[0],H[1]+bob), rho=H[2]*0.72, eyeCol=shade(kit.eye||dark,-40);
+    for(const s of [-1,1]){
+      const xr=s*rho*Math.sin(0.75), yd=rho*Math.cos(0.75);
+      const vis=depth(xr,yd); if(vis<-0.6) continue;
+      const p=[hc[0]+xr*r[0]+yd*d[0], hc[1]+vis*0.5];
+      g2.px(p[0],p[1],eyeCol); if(F==='jaw'||F==='trunk'||F==='goat'||F==='spider') g2.px(p[0]+ (s>0?1:-1),p[1],eyeCol);
+      if(F==='spider'){ g2.px(p[0],p[1]+1,eyeCol); g2.px(p[0]+(s>0?2:-2),p[1]-1,eyeCol); }   // a cluster of eyes
+    }
+  });
+
+  parts.sort((a,b)=>a.dep-b.dep).forEach(p=>p.fn(g));
+  if(opt.emboss!==false){ g.shadowSide(20); g.emboss(30); }   // lighter side shadow: a beast's legs are all edge
+  if(opt.outline!==false) g.outline();
+  return g;
+}
+function buildQuadruped(kit,opt){
+  return FACING_NAMES.map((_,f)=>[0,1,2,3].map(k=>bake(quadrupedFrame(f,k,kit,opt))));
+}
+const BEASTS=[
+  {name:'Danger Llama',   kit:{main:'#d8c8a8',light:'#fff0d8',dark:'#7a6a4a',leg:'#5a4a30',feature:'llama',eye:'#000000'}},
+  {name:'Bokodile',       kit:{main:'#3a6a34',light:'#7ab060',dark:'#182f16',leg:'#2a4a26',feature:'snout',eye:'#ffd23c'}},
+  {name:'Hippopotomadul', kit:{main:'#8a6a7a',light:'#c8a0b0',dark:'#432f3a',leg:'#5a4252',feature:'jaw',eye:'#000000'}},
+  {name:'Battle Goat',    kit:{main:'#b0a898',light:'#e8e0d0',dark:'#54504a',leg:'#3a3630',feature:'goat',eye:'#ffd23c'}},
+  {name:'Mammoth',        kit:{main:'#6a5a4a',light:'#a89078',dark:'#332a20',leg:'#4a3c2e',feature:'trunk',eye:'#000000'}},
+  {name:'Spider',         kit:{main:'#2a2a30',light:'#4a4a55',dark:'#101014',leg:'#3a3a44',feature:'spider',eye:'#ff2020'}}
+];
+
+/* ============================ the classes ============================ */
+const MASTER={ skin:'#e8b07a', hair:'#5a2e12', tunic:'#3a7fd5', trousers:'#2a3a6a', boots:'#4a2a12', steel:'#d8d8e8' };
+const CLASSES=[
+  {name:'Barbarian',  kit:{skin:'#e8b07a', hair:'#5a2e12', tunic:'#8a5a2a', trousers:'#4a3018', boots:'#3a2210', steel:'#b8b8c8', head:'fullhelm', horns:true, weapon:'axe', cape:'#5a1a10'}},
+  {name:'Knight',     kit:{skin:'#e8b07a', hair:'#3a2a1a', tunic:'#1e4fa8', trousers:'#1a2a5a', boots:'#2a2a3a', steel:'#c4c4d4', head:'helm', weapon:'sword', offhand:'shield', shield:'#cc2418', chest:'plate', cape:'#1a2a6a'}},
+  {name:'Valkyrie',   kit:{skin:'#f0c090', hair:'#e8d060', tunic:'#2f5fb0', trousers:'#7a1a2a', boots:'#5a3a1a', steel:'#c8c8d8', head:'winghelm', weapon:'spear', offhand:'shield', shield:'#ffd23c', chest:'plate', female:true, cape:'#8a1a2a'}},
+  {name:'Archer',     kit:{skin:'#e8b07a', hair:'#7a4a1a', tunic:'#2fa82a', trousers:'#3a5a2a', boots:'#5a3a1a', steel:'#d8d8e8', head:'hood', cloth:'#116014', weapon:'bow', cape:'#0e4a12'}},
+  {name:'Wizard',     kit:{skin:'#e8b07a', hair:'#d8d8e8', tunic:'#3a3a9a', trousers:'#2a2a5a', boots:'#3a2a12', steel:'#d8d8e8', head:'wizard', cloth:'#3a3a9a', weapon:'staff', gem:'#9ad8ff', chest:'robe', female:true}},
+  {name:'Dark Elf',   kit:{skin:'#6a5a7a', hair:'#e8e8f0', tunic:'#4a2a6a', trousers:'#20103a', boots:'#20103a', steel:'#d8d8e8', head:'hair', weapon:'bow', chest:'cape', cape:'#20103a', female:true}},
+  {name:'Cleric',     kit:{skin:'#e8b07a', hair:'#5a2e12', tunic:'#e8e0d0', trousers:'#b0a898', boots:'#4a2a12', steel:'#ffd23c', head:'circlet', gold:'#ffd23c', weapon:'mace', offhand:'book', book:'#6e0f06', chest:'robe'}},
+  {name:'Thief',      kit:{skin:'#e8b07a', hair:'#1a1a1a', tunic:'#4a4a5a', trousers:'#2a2a34', boots:'#1a1a22', steel:'#d8d8e8', head:'hood', cloth:'#2a2a34', weapon:'dagger', slim:true, cape:'#1a1a24'}},
+  {name:'Necromancer',kit:{skin:'#b0b0c0', hair:'#1a1a1a', tunic:'#2a1a3a', trousers:'#1a1020', boots:'#1a1020', steel:'#d8d8e8', head:'skullhood', cloth:'#3a2a4a', weapon:'staff', gem:'#8cf07a', chest:'cape', cape:'#1a0a20'}},
+];
+
+const ENEMY_KITS={
+  grunt:   {skin:'#c83828', hair:'#4a0804', tunic:'#7a1a10', trousers:'#4a0804', boots:'#2a0402', steel:'#8a8a9a', head:'horns', weapon:'mace', bulk:true, eyes:'#ffe040'},
+  demon:   {skin:'#a01810', hair:'#2a0404', tunic:'#3a0a0a', trousers:'#2a0404', boots:'#1a0202', steel:'#8a8a9a', head:'horns', weapon:'axe', chest:'cape', cape:'#1a0202', bulk:true, eyes:'#ff8a20', bigEyes:true},
+  goblin:  {skin:'#4a8a3a', hair:'#1e3a14', tunic:'#5a4a2a', trousers:'#2a2a1a', boots:'#1a1a10', steel:'#b8b8c8', head:'cap', cloth:'#3a2a1a', weapon:'spear', slim:true, eyes:'#ff3a2a'},
+  zombie:  {skin:'#7a9a6a', hair:'#2a3a20', tunic:'#4a4a3a', trousers:'#2a2a20', boots:'#1a1a10', steel:'#8a8a9a', head:'hair', weapon:'none', eyes:'#e8ffb0'},
+  ghost:   {skin:'#12121c', hands:'#e8ecf4', hair:'#12121c', tunic:'#d8dce8', trousers:'#d8dce8', boots:'#d8dce8', steel:'#d8dce8', head:'hood', cloth:'#c8ccd8', weapon:'none', wraith:true, chest:'robe', eyes:'#ff2a2a'},
+  sorcerer:  {skin:'#6a5a7a', hair:'#1a1a2a', tunic:'#2a1a3a', trousers:'#1a1020', boots:'#1a1020', steel:'#8a8a9a', head:'hood', cloth:'#1e1230', weapon:'staff', gem:'#c060ff', chest:'robe', slim:true, eyes:'#e070ff'},
+  troll:     {skin:'#6a8a5a', hair:'#2a3a20', tunic:'#4a3a2a', trousers:'#2a2018', boots:'#1a1410', steel:'#8a8a9a', head:'hair', weapon:'mace', bulk:true, eyes:'#ffd040'},
+  redskel:   {skin:'#c02020', bone:'#d03030', hair:'#4a0a0a', tunic:'#5a1010', trousers:'#3a0a0a', boots:'#2a0808', steel:'#d8d8e8', head:'skull', weapon:'axe', slim:true, eyes:'#ffe040'},
+  blackghost:{skin:'#0a0a10', hands:'#8a8a9a', hair:'#0a0a10', tunic:'#2a2a34', trousers:'#2a2a34', boots:'#2a2a34', steel:'#8a8a9a', head:'hood', cloth:'#1a1a24', weapon:'none', wraith:true, chest:'robe', eyes:'#8cf07a'},
+  firedemon: {skin:'#ff6a20', hair:'#7a2000', tunic:'#a03010', trousers:'#5a1808', boots:'#3a0a04', steel:'#8a8a9a', head:'horns', weapon:'none', bulk:true, eyes:'#ffff60', bigEyes:true},
+  blackskel: {skin:'#2a2a34', bone:'#34343e', hair:'#101018', tunic:'#1a1a24', trousers:'#101018', boots:'#101018', steel:'#8a8a9a', head:'skull', weapon:'staff', gem:'#ff8a20', slim:true, eyes:'#ff8a20'},
+  skeleton:{skin:'#e8e0d0', hair:'#4a4a40', tunic:'#5a5a50', trousers:'#3a3a30', boots:'#2a2a20', steel:'#d8d8e8', head:'skull', weapon:'dagger', slim:true, eyes:'#ff2a2a'}
+};
+const ENEMIES=Object.keys(ENEMY_KITS).map(k=>({name:k, kit:ENEMY_KITS[k]}));
+
+/* ============================ the page ============================ */
+const Z=4;
+let SPR=null, CSPR=[], BSPR=[], ESPR=[];
+function opts(){ return { outline:oOutline.checked, emboss:oEmboss.checked, shadow:oShadow.checked }; }
+function rebuild(){ SPR=buildHumanoid(MASTER,opts()); CSPR=CLASSES.map(c=>buildHumanoid(c.kit,opts())); BSPR=BEASTS.map(b=>buildQuadruped(b.kit,opts())); ESPR=ENEMIES.map(e=>buildHumanoid(e.kit,opts())); drawSheet(); }
+function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+function pixelGrid(ctx,w,h){
+  if(!oGrid.checked) return;
+  ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1;
+  for(let x=0;x<=w;x+=Z){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,h); ctx.stroke(); }
+  for(let y=0;y<=h;y+=Z){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(w,y+0.5); ctx.stroke(); }
+}
+function drawSheet(){
+  const el=document.getElementById('sheet'); clear(el);
+  SPR.forEach((frames,f)=>{
+    const cell=document.createElement('div'); cell.className='cell';
+    const cv=document.createElement('canvas'); cv.width=CELL*Z*4+3*4; cv.height=CELL*Z;
+    const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false;
+    frames.forEach((im,k)=>ctx.drawImage(im,k*(CELL*Z+4),0,CELL*Z,CELL*Z));
+    pixelGrid(ctx,cv.width,cv.height);
+    cell.appendChild(cv); cell.appendChild(document.createTextNode(FACING_NAMES[f]));
+    el.appendChild(cell);
+  });
+}
+const animCv=[], classCv=[], beastCv=[], enemyCv=[];
+(function(){
+  const el=document.getElementById('anim');
+  FACING_NAMES.forEach((n,f)=>{
+    const cell=document.createElement('div'); cell.className='cell';
+    const cv=document.createElement('canvas'); cv.width=CELL*Z; cv.height=CELL*Z;
+    cell.appendChild(cv); cell.appendChild(document.createTextNode(n)); el.appendChild(cell); animCv.push(cv);
+  });
+  const cl=document.getElementById('classes');
+  CLASSES.forEach((c,i)=>{
+    const box=document.createElement('div'); box.className='cls';
+    const h3=document.createElement('h3'); h3.textContent=c.name+'  -  '+(c.kit.head)+' / '+c.kit.weapon+(c.kit.offhand?' + '+c.kit.offhand:''); box.appendChild(h3);
+    const row=document.createElement('div'); row.className='row';
+    const cvs=[];
+    FACING_NAMES.forEach((n,f)=>{ const cell=document.createElement('div'); cell.className='cell';
+      const cv=document.createElement('canvas'); cv.width=CELL*Z; cv.height=CELL*Z; cell.appendChild(cv); cell.appendChild(document.createTextNode(n)); row.appendChild(cell); cvs.push(cv); });
+    const small=document.createElement('canvas'); small.width=8*(CELL*2+6); small.height=CELL*2; small.title='2x';
+    const sc=document.createElement('div'); sc.className='cell'; sc.appendChild(small); sc.appendChild(document.createTextNode('2x')); row.appendChild(sc);
+    box.appendChild(row); cl.appendChild(box); classCv.push({cvs,small});
+  });
+  const el2=document.getElementById('enemies');
+  ENEMIES.forEach((c,i)=>{
+    const box=document.createElement('div'); box.className='cls';
+    const h3=document.createElement('h3'); h3.textContent=c.name+'  -  '+c.kit.head+' / '+c.kit.weapon; box.appendChild(h3);
+    const row=document.createElement('div'); row.className='row';
+    const cvs=[];
+    FACING_NAMES.forEach((n,f)=>{ const cell=document.createElement('div'); cell.className='cell';
+      const cv=document.createElement('canvas'); cv.width=CELL*Z; cv.height=CELL*Z; cell.appendChild(cv); cell.appendChild(document.createTextNode(n)); row.appendChild(cell); cvs.push(cv); });
+    const small=document.createElement('canvas'); small.width=8*(CELL*2+6); small.height=CELL*2;
+    const sc=document.createElement('div'); sc.className='cell'; sc.appendChild(small); sc.appendChild(document.createTextNode('2x')); row.appendChild(sc);
+    box.appendChild(row); el2.appendChild(box); enemyCv.push({cvs,small});
+  });
+  const bl=document.getElementById('beasts');
+  BEASTS.forEach((b,i)=>{
+    const box=document.createElement('div'); box.className='cls';
+    const h3=document.createElement('h3'); h3.textContent=b.name+'  -  '+b.kit.feature; box.appendChild(h3);
+    const row=document.createElement('div'); row.className='row';
+    const cvs=[];
+    FACING_NAMES.forEach((n,f)=>{ const cell=document.createElement('div'); cell.className='cell';
+      const cv=document.createElement('canvas'); cv.width=CELL*Z; cv.height=CELL*Z; cell.appendChild(cv); cell.appendChild(document.createTextNode(n)); row.appendChild(cell); cvs.push(cv); });
+    const small=document.createElement('canvas'); small.width=8*(CELL*2+6); small.height=CELL*2;
+    const sc=document.createElement('div'); sc.className='cell'; sc.appendChild(small); sc.appendChild(document.createTextNode('2x')); row.appendChild(sc);
+    box.appendChild(row); bl.appendChild(box); beastCv.push({cvs,small});
+  });
+})();
+let tick=0, walker={x:120,y:150,f:0,leg:0,t:0};
+const PATH_ORDER=[6,7,0,1,2,3,4,5];                      // E, SE, S, SW, W, NW, N, NE - a clockwise loop
+function loop(){
+  tick+=+oSpeed.value/60;
+  const k=Math.floor(tick)%4;                            // contact, pass, contact, pass
+  animCv.forEach((cv,f)=>{ const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,cv.width,cv.height);
+                            ctx.drawImage(SPR[f][k],0,0,CELL*Z,CELL*Z); pixelGrid(ctx,cv.width,cv.height); });
+  classCv.forEach((o,i)=>{ o.cvs.forEach((cv,f)=>{ const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(CSPR[i][f][k],0,0,CELL*Z,CELL*Z); });
+                           const sc=o.small.getContext('2d'); sc.imageSmoothingEnabled=false; sc.clearRect(0,0,o.small.width,o.small.height);
+                           for(let f=0;f<8;f++) sc.drawImage(CSPR[i][f][k],f*(CELL*2+6),0,CELL*2,CELL*2); });
+  enemyCv.forEach((o,i)=>{ o.cvs.forEach((cv,f)=>{ const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(ESPR[i][f][k],0,0,CELL*Z,CELL*Z); });
+                           const sc=o.small.getContext('2d'); sc.imageSmoothingEnabled=false; sc.clearRect(0,0,o.small.width,o.small.height);
+                           for(let f=0;f<8;f++) sc.drawImage(ESPR[i][f][k],f*(CELL*2+6),0,CELL*2,CELL*2); });
+  beastCv.forEach((o,i)=>{ o.cvs.forEach((cv,f)=>{ const ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(BSPR[i][f][k],0,0,CELL*Z,CELL*Z); });
+                           const sc=o.small.getContext('2d'); sc.imageSmoothingEnabled=false; sc.clearRect(0,0,o.small.width,o.small.height);
+                           for(let f=0;f<8;f++) sc.drawImage(BSPR[i][f][k],f*(CELL*2+6),0,CELL*2,CELL*2); });
+  const fl=document.getElementById('floor'), ctx=fl.getContext('2d'); ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,fl.width,fl.height);
+  ctx.strokeStyle='#3a3350'; ctx.lineWidth=1;
+  for(let x=0;x<fl.width;x+=40){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,fl.height); ctx.stroke(); }
+  for(let y=0;y<fl.height;y+=40){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(fl.width,y+0.5); ctx.stroke(); }
+  const sp=+oSpeed.value*0.32;
+  const dir=FACING_VEC[PATH_ORDER[walker.leg]];
+  walker.x+=dir[0]*sp; walker.y+=dir[1]*sp*0.6; walker.f=PATH_ORDER[walker.leg];
+  walker.t+=sp;
+  if(walker.t>70){ walker.t=0; walker.leg=(walker.leg+1)%8; }
+  ctx.drawImage(SPR[walker.f][k],Math.round(walker.x)-CELL*Z/2,Math.round(walker.y)-CELL*Z/2,CELL*Z,CELL*Z);
+  ctx.fillStyle='#8a8aa0'; ctx.font='12px monospace'; ctx.fillText('facing '+FACING_NAMES[walker.f],10,fl.height-10);
+  for(let f=0;f<8;f++){ const cx=460+(f%4)*64, cy=60+Math.floor(f/4)*110;
+    ctx.drawImage(CSPR[f%CLASSES.length][f][k],Math.round(cx)-CELL,Math.round(cy)-CELL,CELL*2,CELL*2); }
+  ctx.fillText('2x, as the game draws them',460,fl.height-10);
+  requestAnimationFrame(loop);
+}
+['oOutline','oEmboss','oShadow','oGrid'].forEach(id=>document.getElementById(id).addEventListener('change',rebuild));
+rebuild(); loop();
+</script>
+</body></html>
