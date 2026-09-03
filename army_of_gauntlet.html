@@ -1404,16 +1404,21 @@ function quadrupedFrame(f,phase,kit,opt){
   }
   if(F==='goat'){
     for(let z=S.zc+1;z<=13;z+=1){ const t=n-0.8+(z-S.zc)*0.4; add(depth(0,t)+0.02, g2=>blob(g2,0,t,z,1.9,main)); }    // the neck, held high
-    add(depth(0,n+2.4)+0.05, g2=>{ blob(g2,0,n+2.4,14.2,2.9,main);                                                     // head, up above the back
-      blob(g2,0,n+4.4,12.8,2,light); blob(g2,0,n+5.4,12,1.5,light);                                                   // the long muzzle, dropping forward
-      blob(g2,0,n+3.4,14.6,1.1,shade(light,10));                                                                       // a blaze down the face
-      blob(g2,0,n+2.6,16,1.7,mainD);                                                                                   // brow ridge under the horns
-      const nz=P(0,n+6.6,11.8+bob); g2.rect(nz[0]-1,nz[1],2,1,shade(dark,-30));                                       // nose
-      const mo=P(0,n+6,10.6+bob); g2.rect(mo[0]-1,mo[1],3,1,shade(main,-50));                                         // mouth line
-      seg(g2,[0,n+5.6,10.4],[0,n+5.2,8.6],1.3,light);                                                                   // beard
-      const sp=1+0.15*Math.abs(d[1]);                                                                                    // horns and ears splay a touch wider face-on
-      for(const s of [-1,1]){ seg(g2,[s*1.4*sp,n+2,16.2],[s*2.6*sp,n+0.2,18.6],1.6,C.bone); seg(g2,[s*2.6*sp,n+0.2,18.6],[s*3*sp,-0.6+n,17.4],1.2,C.bone);   // horns back and hooked
-                              seg(g2,[s*2.4*sp,n+2.4,14.6],[s*4.2*sp,n+2,15.2],1.5,main); } });                        // ears, out sideways
+    add(depth(0,n+2.4)+0.05, g2=>{
+      /* the goat's face is a long wedge: broad at the brow, narrowing down to the
+         muzzle, the way it reads head-on; the muzzle hangs forward and well below
+         the brow so the wedge shows from the front instead of stacking into a ball */
+      blob(g2,0,n+2.4,15.2,3.1,main);                                                                                  // the brow, wide
+      blob(g2,0,n+3.4,13.2,2.5,main); blob(g2,0,n+4.4,11.4,2,light); blob(g2,0,n+5.2,9.8,1.5,light);                  // the wedge narrowing to the muzzle
+      blob(g2,0,n+3.6,14.4,1,shade(light,10)); blob(g2,0,n+4.6,12,0.9,shade(light,10));                              // a blaze down the centre
+      const nz=P(0,n+5.8,9.2+bob); g2.rect(nz[0]-1,nz[1],3,2,shade(dark,-30)); g2.px(nz[0],nz[1]+1,C.blk);            // the dark nose
+      const mo=P(0,n+5.6,7.8+bob); g2.rect(mo[0]-1,mo[1],3,1,shade(main,-50));                                         // mouth
+      seg(g2,[0,n+5.4,7.6],[0,n+5,5.4],1.4,light);                                                                       // beard, hanging under the chin
+      const sp=1+0.15*Math.abs(d[1]);
+      for(const s of [-1,1]){
+        seg(g2,[s*1.6*sp,n+2,17.4],[s*2.6*sp,n+1.2,20.6],1.9,C.bone); seg(g2,[s*2.6*sp,n+1.2,20.6],[s*4.4*sp,n+0.6,21.6],1.4,C.bone);   // horns: up from the crown, then curving out
+        seg(g2,[s*2.6*sp,n+2.6,15.6],[s*5.4*sp,n+2.2,15.2],1.7,main); const et=P(s*5.4*sp,n+2.2,15.2+bob); g2.px(et[0],et[1],mainD);   // ears, straight out at brow level
+      } });
     for(let t=-3;t<=3;t+=1) add(depth(0,t)+0.03, g2=>{ const p=P(0,t,S.zc+S.R*0.62+0.6+bob); g2.rect(p[0]-2,p[1],4,1,shade(main,-45)); });   // barding
     add(depth(0,-n-0.3)-0.02, g2=>blob(g2,0,-n-0.8,S.zc+1.2,1.2,light));
   }
@@ -1435,9 +1440,9 @@ function quadrupedFrame(f,phase,kit,opt){
       for(const s of [-1,1]) seg(g2,[s*1.2,n+3,4],[s*1.8,n+4.6,3],1.2,dark); });                                        // fangs
     for(const s of [-1,1]) for(const t of [-1.5,1.5]) add(depth(s*4,t)+0.02, g2=>seg(g2,[s*2.6,t,S.zc+1],[s*7,t*2.2,0.4],1.4,legC));   // four more legs, splayed
   }
-  const H = {llama:[n+2.6,16.2,2.5], snout:[n+1,5.8,2.6], jaw:[n+2,9.4,3.9], goat:[n+2.4,14.2,2.9], trunk:[n+2,9.6,3.4], spider:[n+1.2,4.8,2.2]}[F];
+  const H = {llama:[n+2.6,16.2,2.5], snout:[n+1,5.8,2.6], jaw:[n+2,9.4,3.9], goat:[n+2.4,15.2,3.1], trunk:[n+2,9.6,3.4], spider:[n+1.2,4.8,2.2]}[F];
   add(depth(0,H[0])+0.2, g2=>{
-    const hc=P(0,H[0],H[1]+bob), rho=H[2]*0.72, eyeCol=shade(kit.eye||dark,-40);
+    const hc=P(0,H[0],H[1]+bob), rho=H[2]*(F==='goat'?0.98:0.72), eyeCol=shade(kit.eye||dark,-40);   // a goat's eyes sit wide on the brow
     for(const s of [-1,1]){
       const xr=s*rho*Math.sin(0.75), yd=rho*Math.cos(0.75);
       const vis=depth(xr,yd); if(vis<-0.6) continue;
