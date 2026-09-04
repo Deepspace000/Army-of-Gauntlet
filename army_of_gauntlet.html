@@ -2066,6 +2066,8 @@ function doorSlab(g,vertical,L){
     g.rect(A+B-2,0,1,20,shade(L.door,-50));        // shadowed edge
     g.rect(A+1,9,B-2,2,L.doorD);                   // centre band
     for(const y of [3,9,16]) g.px(A+3,y,shade(L.door,-60)).px(A+4,y,shade(L.door,40));
+    g.rect(A+1,16,B-2,3,shade(L.doorD,-30));       // the foot: a dark face like the wall blocks
+    g.rect(A+1,16,B-2,1,C.blk);
     g.rect(A,0,B,1,C.blk); g.rect(A,19,B,1,C.blk);
     g.rect(A-1,0,1,20,C.blk); g.rect(A+B,0,1,20,C.blk);
   } else {
@@ -2075,8 +2077,10 @@ function doorSlab(g,vertical,L){
     g.rect(0,A+B-2,20,1,shade(L.door,-50));
     g.rect(9,A+1,2,B-2,L.doorD);
     for(const x of [3,9,16]) g.px(x,A+3,shade(L.door,-60)).px(x,A+4,shade(L.door,40));
+    g.rect(0,A+B,20,3,shade(L.doorD,-30));         // the front face below the slab, as on the walls
+    g.rect(0,A+B,20,1,C.blk);
     g.rect(0,A,1,B,C.blk); g.rect(19,A,1,B,C.blk);
-    g.rect(0,A-1,20,1,C.blk); g.rect(0,A+B,20,1,C.blk);
+    g.rect(0,A-1,20,1,C.blk); g.rect(0,A+B+3,20,1,C.blk);
   }
 }
 /* the three locks: gold opens the common doors, silver the vaults that hold a
@@ -2240,223 +2244,232 @@ function doorVertical(tx,ty){
   if(!N&&!S) return false;                // you walk north-south: lay it flat
   return (!E||!W);                        // one way open: face that way
 }
-/* ---- trees: a trunk under a lumpy canopy that overhangs the tile ---- */
-function drawTree(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  ctx.fillStyle=shade(FLOOR_BASE,-14); ctx.fillRect(x,y,TILE,TILE);   // shaded ground
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x+8,y+11,4,8);                // trunk
-  ctx.fillStyle=shade(WALL_BASE,26); ctx.fillRect(x+8,y+11,1,8);
-  const cx=x+10, cy=y+8+((h*2)|0);
-  pxDisc(ctx,cx,cy,8,WALL_DK);                                       // canopy mass
-  pxDisc(ctx,cx-1,cy-1,7,WALL_MID);
-  pxDisc(ctx,cx-2,cy-3,4,WALL_LT);                                   // lit crown
-  ctx.fillStyle=WALL_DK;
-  ctx.fillRect(cx+3+((h*2)|0),cy+2,2,2); ctx.fillRect(cx-6,cy+3,2,2); // leaf gaps
-}
-/* ---- water: a still surface with ripple lines and a bank edge ---- */
-function drawWater(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
+/* ==========================================================================
+   WALLS AS RAISED BLOCKS
+   Every wall is a block standing proud of the floor, seen from above and a
+   little in front, the way the 1985 cabinet drew them: a lit TOP face carrying
+   the biome's texture, and wherever the tile below is open floor a darker
+   FRONT face in the bottom FACE_H pixels, so a run of wall reads as one solid
+   mass with a visible front. Light comes from the upper left: the crest and
+   the left flank of a run are lit, the right flank is shaded, and
+   castShadows() throws the block's shadow down and to the right onto the
+   floor. Each biome supplies two painters, top() and face(); the geometry and
+   the seams are assembled once, here, so every biome sits on the same frame.
+   Trees keep their canopies and water is sunken rather than raised; both get
+   the same lighting logic in their own way.
+   ========================================================================== */
+const FACE_H=7;
+function wallSides(tx,ty){ return {N:isWall(tx,ty-1),S:isWall(tx,ty+1),E:isWall(tx+1,ty),W:isWall(tx-1,ty)}; }
+const INSET=2;                                             // the block stands this far in from an open side
+function block(ctx,tx,ty,P){
+  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty), s=wallSides(tx,ty);
+  const faceH = s.S ? 0 : FACE_H;
+  /* the slab is inset from every open side, so a passage between two walls
+     keeps a dark gutter either side and reads a touch wider than the tiles */
+  const x0=s.W?x:x+INSET, x1=s.E?x+TILE:x+TILE-INSET, y0=s.N?y:y+INSET, y1=s.S?y+TILE:y+TILE-1;
+  const w=x1-x0, topH=(y1-y0)-faceH;
   ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  ctx.fillStyle=WALL_MID;  ctx.fillRect(x,y+2,TILE,TILE-4);
-  ctx.fillStyle=WALL_DK;   ctx.fillRect(x,y+TILE-3,TILE,3);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0,y0,w,y1-y0); ctx.clip();
+  P.top(ctx,x0,y0,w,topH,s,h,tx,ty);
+  /* light the edges of the RUN, not of every tile */
+  ctx.fillStyle=WALL_LT;
+  if(!s.N) ctx.fillRect(x0,y0,w,1);                          // lit crest
+  if(!s.W) ctx.fillRect(x0,y0,1,topH);                       // lit left flank
+  ctx.fillStyle=shade(WALL_DK,-12);
+  if(!s.E) ctx.fillRect(x1-1,y0,1,topH);                     // shaded right flank
+  if(faceH){
+    P.face(ctx,x0,y0+topH,w,faceH,s,h,tx,ty);
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x0,y0+topH,w,1);     // the lip where top meets front
+    ctx.fillStyle=shade(WALL_DK,-45); ctx.fillRect(x0,y1-1,w,1);       // the plinth
+  }
+  ctx.restore();
+  ctx.fillStyle='#000';                                     // hard seams against open floor
+  if(!s.N) ctx.fillRect(x,y0-1,TILE,1);
+  if(!s.W) ctx.fillRect(x0-1,y,1,TILE);
+  if(!s.E) ctx.fillRect(x1,y,1,TILE);
+  if(!s.S) ctx.fillRect(x,y1,TILE,1);
+}
+/* brick courses on a face: rows `course` tall, joints staggered like real bonding */
+function bricks(ctx,x,y,w,h,course,len,mortar,lit){
+  for(let r=0, by=y; by<y+h; r++, by+=course){
+    const rh=Math.min(course,y+h-by);
+    if(lit){ ctx.fillStyle=lit; ctx.fillRect(x,by,w,1); }                 // lit top of each course
+    ctx.fillStyle=mortar;
+    if(by+rh<y+h) ctx.fillRect(x,by+rh-1,w,1);                            // bed joint
+    const off=(r%2)?((len/2)|0):0;
+    for(let bx=x+off; bx<x+w; bx+=len) ctx.fillRect(bx,by,1,rh);         // head joints
+  }
+}
+const PAINT={};
+/* ---- dressed stone: keep, expanse and anything without its own look ---- */
+PAINT.stone={
+  top(ctx,x,y,w,h,s,hs,tx,ty){
+    ctx.fillStyle=WALL_MID; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle=shade(WALL_MID,-18);                                  // faint flagstone joints
+    for(let by=y+5; by<y+h-1; by+=5){ ctx.fillRect(x,by,w,1); ctx.fillRect(x+(((by/5)|0)%2?4:11),by-5,1,5); }
+    ctx.fillStyle=shade(WALL_MID,16);                                   // grit
+    for(let i=0;i<4;i++) ctx.fillRect(x+2+((hash(tx*3+i,ty*7)*(w-4))|0), y+1+((hash(ty*5+i,tx*11)*(h-2))|0),1,1);
+  },
+  face(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    bricks(ctx,x,y+1,w,h-2,3,7,shade(WALL_DK,-38),shade(WALL_DK,14));
+  }
+};
+PAINT.open=PAINT.stone;
+/* ---- castle: ashlar top with battlements facing the room, big blocks below ---- */
+PAINT.castle={
+  top(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_MID; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle=shade(WALL_MID,-16);
+    for(let by=y+6; by<y+h-1; by+=6){ ctx.fillRect(x,by,w,1); ctx.fillRect(x+(((by/6)|0)%2?3:12),by-6,1,6); }
+    if(!s.N){                                                           // crenellations along the crest
+      ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y+1,w,4);
+      ctx.fillStyle=WALL_LT;   ctx.fillRect(x+1,y+1,5,3); ctx.fillRect(x+8,y+1,4,3); ctx.fillRect(x+14,y+1,5,3);
+      ctx.fillStyle=shade(WALL_MID,-30); ctx.fillRect(x,y+5,w,1);
+    }
+  },
+  face(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    bricks(ctx,x,y+1,w,h-2,4,10,shade(WALL_DK,-40),shade(WALL_DK,12));
+    if(hs>0.88){                                                        // a sconce on the face
+      ctx.fillStyle=C.brnD; ctx.fillRect(x+9,y+3,2,3);
+      ctx.fillStyle=C.org;  ctx.fillRect(x+9,y+1,2,2);
+      ctx.fillStyle=C.yel;  ctx.fillRect(x+9,y+1,1,1);
+    }
+  }
+};
+/* ---- labyrinth: glazed tiles, chequered on top, darker bricks in front ---- */
+PAINT.laby={
+  top(ctx,x,y,w,h){
+    ctx.fillStyle=shade(WALL_DK,-10); ctx.fillRect(x,y,w,h);            // grout
+    for(let j=y+1;j<y+h-1;j+=5) for(let i=x+1;i<x+w-1;i+=5){
+      const tw=Math.min(4,x+w-1-i), th=Math.min(4,y+h-1-j); if(tw<1||th<1) continue;
+      ctx.fillStyle=(((i/5|0)+(j/5|0))%2)?WALL_MID:shade(WALL_MID,-14); ctx.fillRect(i,j,tw,th);
+      ctx.fillStyle=WALL_LT; ctx.fillRect(i,j,tw,1);                    // glaze catches the light
+    }
+  },
+  face(ctx,x,y,w,h){
+    ctx.fillStyle=shade(WALL_DK,-20); ctx.fillRect(x,y,w,h);
+    for(let i=x+1;i<x+w-1;i+=5){ ctx.fillStyle=WALL_DK; ctx.fillRect(i,y+1,4,2); ctx.fillRect(i+2,y+4,4,2);
+      ctx.fillStyle=shade(WALL_DK,22); ctx.fillRect(i,y+1,4,1); ctx.fillRect(i+2,y+4,4,1); }
+  }
+};
+/* ---- palace: a colonnade - gilded marble on top, fluted shafts in front ---- */
+PAINT.palace={
+  top(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_MID; ctx.fillRect(x,y,w,h);
+    for(let i=0;i<3;i++){ ctx.fillStyle=WALL_DK; ctx.fillRect(x+4+i*5,y+2,1,h-4);
+                          ctx.fillStyle=WALL_LT; ctx.fillRect(x+5+i*5,y+2,1,h-4); }
+    ctx.fillStyle='rgba(240,200,90,0.8)';                               // gilding along the open edges
+    if(!s.N) ctx.fillRect(x+1,y+2,w-2,1);
+    if(!s.W) ctx.fillRect(x+2,y+1,1,h-2);
+    if(hs>0.88){ ctx.fillStyle='rgba(240,200,90,0.9)'; ctx.fillRect(x+8,y+((h/2)|0)-1,4,3); }
+  },
+  face(ctx,x,y,w,h){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    for(let i=0;i<3;i++){ ctx.fillStyle=shade(WALL_DK,-32); ctx.fillRect(x+4+i*5,y+1,1,h-2);
+                          ctx.fillStyle=shade(WALL_DK,20);  ctx.fillRect(x+5+i*5,y+1,1,h-2); }
+    ctx.fillStyle='rgba(240,200,90,0.7)'; ctx.fillRect(x+1,y+h-3,w-2,1);   // gilded base
+  }
+};
+/* ---- cavern: lumpy rock on top, craggy dark face ---- */
+PAINT.cavern={
+  top(ctx,x,y,w,h,s,hs,tx,ty){
+    ctx.fillStyle=WALL_MID; ctx.fillRect(x,y,w,h);
+    pxDisc(ctx,x+7+((hs*6)|0),y+((h/2)|0)-1,Math.min(5,(h/2)|0),WALL_LT);   // a lit hump
+    ctx.fillStyle=WALL_DK;
+    ctx.fillRect(x+2+((hs*9)|0),y+h-4,3,2); ctx.fillRect(x+12,y+2+((hs*4)|0),2,3); ctx.fillRect(x+15,y+h-6,2,2);
+    if(hs>0.85){ ctx.fillStyle=shade(WALL_LT,60); ctx.fillRect(x+9,y+((h/2)|0),2,2); }   // crystal glint
+  },
+  face(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle=shade(WALL_DK,-34);                                   // cracks and hollows
+    ctx.fillRect(x+3+((hs*5)|0),y+1,2,3); ctx.fillRect(x+11,y+3,3,2); ctx.fillRect(x+16,y+1,1,4);
+    ctx.fillStyle=shade(WALL_DK,18);                                    // catch-light on the bulges
+    ctx.fillRect(x+6,y+1,3,1); ctx.fillRect(x+13+((hs*3)|0),y+2,2,1);
+  }
+};
+/* ---- ruins: worn blocks on top, broken courses in front ---- */
+PAINT.desert={
+  top(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_MID; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle=shade(WALL_MID,-20);
+    for(let by=y+4; by<y+h-1; by+=4){ ctx.fillRect(x,by,w,1); ctx.fillRect(x+(((by/4)|0)%2?2:7),by-4,1,4); ctx.fillRect(x+(((by/4)|0)%2?12:17),by-4,1,4); }
+    if(hs>0.72){ ctx.fillStyle=shade(WALL_DK,-30); ctx.fillRect(x+w-5,y+1,4,3); ctx.fillRect(x+w-3,y+4,2,2); }   // a bite out of the corner
+    ctx.fillStyle=shade(WALL_MID,18); ctx.fillRect(x+2+((hs*12)|0),y+2,2,1);   // sun-bleached spot
+  },
+  face(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    bricks(ctx,x,y+1,w,h-2,3,6,shade(WALL_DK,-40),shade(WALL_DK,12));
+    if(hs>0.5){ ctx.fillStyle=shade(WALL_DK,-55); ctx.fillRect(x+4+((hs*8)|0),y+1,3,2); }   // a brick gone
+  }
+};
+/* ---- village: thatched roofs on top, timber-framed fronts with a door ---- */
+PAINT.village={
+  top(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=WALL_DK; ctx.fillRect(x,y,w,h);
+    for(let by=y+1; by<y+h; by+=2){ ctx.fillStyle=(((by-y)/2|0)%3===0)?shade(WALL_MID,-10):WALL_MID; ctx.fillRect(x,by,w,1); }   // thatch courses
+    for(let i=0;i<5;i++) { ctx.fillStyle=shade(WALL_MID,-24); ctx.fillRect(x+1+((hash(hs*97+i,i*13)*(w-2))|0),y+1+((hash(i*7,hs*31)*(h-2))|0),1,2); }   // loose straw
+    if(!s.N){ ctx.fillStyle=WALL_LT; ctx.fillRect(x,y+2,w,1); }         // the ridge catches the sun
+    if(hs>0.8){ ctx.fillStyle=shade(WALL_BASE,-10); ctx.fillRect(x+14,y+2,3,4);      // chimney
+                ctx.fillStyle='rgba(220,220,230,0.4)'; ctx.fillRect(x+15,y+1,2,1); }
+  },
+  face(ctx,x,y,w,h,s,hs){
+    ctx.fillStyle=shade(WALL_LT,-28); ctx.fillRect(x,y,w,h);            // plaster
+    ctx.fillStyle=shade(WALL_DK,-24);                                   // timbers
+    ctx.fillRect(x,y+1,w,1); ctx.fillRect(x+4,y+1,1,h-2); ctx.fillRect(x+15,y+1,1,h-2);
+    ctx.fillStyle='#2a1a10'; ctx.fillRect(x+8,y+2,4,h-3);               // the door onto the street
+    ctx.fillStyle=C.yelD;    ctx.fillRect(x+10,y+4,1,1);
+    ctx.fillStyle=(hs>0.5)?C.yel:'#20303a'; ctx.fillRect(x+1,y+3,2,2); ctx.fillRect(x+17,y+3,2,2);   // windows, some lit
+  }
+};
+/* ---- trees: a canopy overhanging the tile, with the dark hedge-face below it ---- */
+function drawTree(ctx,tx,ty){
+  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty), s=wallSides(tx,ty);
+  ctx.fillStyle=shade(FLOOR_BASE,-16); ctx.fillRect(x,y,TILE,TILE);   // shaded ground
+  if(!s.S){                                                           // under the canopy: the dark face of the hedge
+    ctx.fillStyle=shade(WALL_BASE,-12); ctx.fillRect(x+2,y+12,TILE-4,7);
+    ctx.fillStyle=shade(WALL_BASE,-40); ctx.fillRect(x+2,y+18,TILE-4,1);
+  }
+  ctx.fillStyle=WALL_BASE; ctx.fillRect(x+8,y+11,4,8);                // trunk
+  ctx.fillStyle=shade(WALL_BASE,30); ctx.fillRect(x+8,y+11,1,8);
+  const cx=x+10, cy=y+7+((h*2)|0);
+  pxDisc(ctx,cx+1,cy+1,8,shade(WALL_DK,-24));                          // canopy shadow side
+  pxDisc(ctx,cx,cy,8,WALL_DK);                                        // canopy mass
+  pxDisc(ctx,cx-1,cy-1,6,WALL_MID);
+  pxDisc(ctx,cx-2,cy-3,3,WALL_LT);                                    // lit crown
+  ctx.fillStyle=WALL_DK;
+  ctx.fillRect(cx+3+((h*2)|0),cy+2,2,2); ctx.fillRect(cx-6,cy+3,2,2);  // leaf gaps
+}
+/* ---- water: sunken, not raised - banks drop into it and the shadow falls in ---- */
+function drawWater(ctx,tx,ty){
+  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty), s=wallSides(tx,ty);
+  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
+  ctx.fillStyle=WALL_MID;  ctx.fillRect(x,y,TILE,TILE);
   for(let i=0;i<3;i++){                                              // ripples
-    const rw=5+((hash(tx*3+i,ty)*8)|0), rx=x+((hash(tx,ty*3+i)*12)|0), ry=y+3+i*5;
+    const rw=5+((hash(tx*3+i,ty)*8)|0), rx=x+((hash(tx,ty*3+i)*12)|0), ry=y+4+i*5;
     ctx.fillStyle=WALL_LT; ctx.fillRect(rx,ry,rw,1);
     ctx.fillStyle=shade(WALL_MID,-18); ctx.fillRect(rx+1,ry+1,rw-2,1);
   }
-  if(h>0.8){ ctx.fillStyle=shade(FLOOR_BASE,10); ctx.fillRect(x+13,y+12,5,4); }  // a rock
-  // banks: a pale line wherever dry land abuts
-  ctx.fillStyle=shade(FLOOR_BASE,24);                // pale bank
-  if(!isWall(tx,ty-1)) ctx.fillRect(x,y,TILE,2);
-  if(!isWall(tx,ty+1)) ctx.fillRect(x,y+TILE-2,TILE,2);
-  if(!isWall(tx-1,ty)) ctx.fillRect(x,y,2,TILE);
-  if(!isWall(tx+1,ty)) ctx.fillRect(x+TILE-2,y,2,TILE);
-  ctx.fillStyle=shade(WALL_DK,-30);                  // and a dark lip inside it
-  if(!isWall(tx,ty-1)) ctx.fillRect(x,y+2,TILE,1);
-  if(!isWall(tx,ty+1)) ctx.fillRect(x,y+TILE-3,TILE,1);
-  if(!isWall(tx-1,ty)) ctx.fillRect(x+2,y,1,TILE);
-  if(!isWall(tx+1,ty)) ctx.fillRect(x+TILE-3,y,1,TILE);
-}
-/* ---- ruins: broken masonry, courses of brick with pieces missing ---- */
-function drawRuin(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  ctx.fillStyle=shade(FLOOR_BASE,-12); ctx.fillRect(x,y,TILE,TILE);
-  const top=(h>0.72)?4:0;                                            // some blocks worn down
-  if(top){ ctx.fillStyle=shade(WALL_DK,-30); ctx.fillRect(x,y,TILE,top); }   // rubble, not floor
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y+top,TILE,TILE-top);
-  ctx.fillStyle=WALL_MID;  ctx.fillRect(x+1,y+top+1,TILE-2,TILE-top-2);
-  for(let r=0;r<4;r++){                                              // brick courses
-    const by=y+top+2+r*4; if(by>y+TILE-3) break;
-    ctx.fillStyle=WALL_DK; ctx.fillRect(x+1,by,TILE-2,1);
-    const off=(r%2)?0:5;
-    ctx.fillRect(x+3+off,by-3,1,3); ctx.fillRect(x+13+off-5,by-3,1,3);
-  }
-  ctx.fillStyle=WALL_LT; ctx.fillRect(x+1,y+top+1,TILE-2,1);         // lit top course
-  if(h>0.5){ ctx.fillStyle=shade(FLOOR_BASE,-12);                    // a bite out of one corner
-    ctx.fillRect(x+TILE-4,y+top,4,3); ctx.fillRect(x+TILE-2,y+top+3,2,2); }
-  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(x,y+TILE-1,TILE,1);
-}
-/* ---- castle: dressed ashlar with a crenellated top course ---- */
-function drawCastle(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  const open=!isWall(tx,ty-1);                       // face the battlements at the room
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  ctx.fillStyle=WALL_MID;  ctx.fillRect(x,y,TILE,TILE-1);
-  for(let r=0;r<4;r++){                              // ashlar courses, staggered
-    const by=y+4+r*5; if(by>y+TILE-1) break;
-    ctx.fillStyle=WALL_DK; ctx.fillRect(x,by,TILE,1);
-    const off=(r%2)?10:4;
-    ctx.fillRect(x+off,by-4,1,4); ctx.fillRect(x+((off+10)%20),by-4,1,4);
-  }
-  if(open){
-    ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,4);
-    ctx.fillStyle=WALL_LT;
-    ctx.fillRect(x+1,y,5,3); ctx.fillRect(x+8,y,4,3); ctx.fillRect(x+14,y,5,3);
-    ctx.fillStyle='#000'; ctx.fillRect(x,y+4,TILE,1);
-  } else { ctx.fillStyle=WALL_LT; ctx.fillRect(x,y,TILE,1); }
-  ctx.fillStyle=WALL_LT; ctx.fillRect(x,y,1,TILE);
-  if(h>0.90){                                        // a lit sconce here and there
-    ctx.fillStyle=C.brnD; ctx.fillRect(x+9,y+11,2,4);
-    ctx.fillStyle=C.org;  ctx.fillRect(x+9,y+8,2,3);
-    ctx.fillStyle=C.yel;  ctx.fillRect(x+9,y+8,1,2);
-  }
-  ctx.fillStyle='#000';                              // the hard seam every wall needs
-  if(!isWall(tx,ty-1)) ctx.fillRect(x,y,TILE,1);
-  if(!isWall(tx,ty+1)) ctx.fillRect(x,y+TILE-1,TILE,1);
-  if(!isWall(tx-1,ty)) ctx.fillRect(x,y,1,TILE);
-  if(!isWall(tx+1,ty)) ctx.fillRect(x+TILE-1,y,1,TILE);
-}
-/* ---- palace: fluted marble columns with a gilded capital ---- */
-function drawPalace(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  ctx.fillStyle=WALL_MID;  ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
-  for(let i=0;i<3;i++){                              // fluting
-    ctx.fillStyle=WALL_DK;  ctx.fillRect(x+4+i*5,y+4,1,TILE-8);
-    ctx.fillStyle=WALL_LT;  ctx.fillRect(x+5+i*5,y+4,1,TILE-8);
-  }
-  const pN=isWall(tx,ty-1), pS=isWall(tx,ty+1);
-  ctx.fillStyle=shade(WALL_LT,20);
-  if(!pN) ctx.fillRect(x+1,y+1,TILE-2,3);                            // capital, at the top
-  if(!pS) ctx.fillRect(x+1,y+TILE-4,TILE-2,3);                       // base, at the foot
-  ctx.fillStyle='rgba(240,200,90,0.75)';                             // gilding
-  ctx.fillRect(x+1,y+4,TILE-2,1); ctx.fillRect(x+1,y+TILE-5,TILE-2,1);
-  if(h>0.88){ ctx.fillStyle='rgba(240,200,90,0.9)'; ctx.fillRect(x+8,y+9,4,3); }
-  ctx.fillStyle='#000';                              // the hard seam every wall needs
-  if(!isWall(tx,ty-1)) ctx.fillRect(x,y,TILE,1);
-  if(!isWall(tx,ty+1)) ctx.fillRect(x,y+TILE-1,TILE,1);
-  if(!isWall(tx-1,ty)) ctx.fillRect(x,y,1,TILE);
-  if(!isWall(tx+1,ty)) ctx.fillRect(x+TILE-1,y,1,TILE);
-}
-/* ---- labyrinth: glazed tiled walls to match the tiled floor ---- */
-function drawLaby(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE;
-  const N=isWall(tx,ty-1),So=isWall(tx,ty+1),E=isWall(tx+1,ty),W=isWall(tx-1,ty);
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  const I=2, x0=W?x:x+I, x1=E?x+TILE:x+TILE-I, y0=N?y:y+I, y1=So?y+TILE:y+TILE-I;
-  ctx.fillStyle=WALL_DK; ctx.fillRect(x0,y0,x1-x0,y1-y0);
-  for(let j=y0;j<y1;j+=5) for(let i=x0;i<x1;i+=5){   // small glazed bricks
-    const w=Math.min(4,x1-i-1), hh=Math.min(4,y1-j-1);
-    if(w<1||hh<1) continue;
-    ctx.fillStyle=(((i/5|0)+(j/5|0))%2)?WALL_MID:shade(WALL_MID,-16);
-    ctx.fillRect(i,j,w,hh);
-    ctx.fillStyle=WALL_LT; ctx.fillRect(i,j,w,1);
-  }
-  ctx.fillStyle='#000';
-  if(!N)  ctx.fillRect(x,y+I-1,TILE,1);
-  if(!So) ctx.fillRect(x,y+TILE-I,TILE,1);
-  if(!W)  ctx.fillRect(x+I-1,y,1,TILE);
-  if(!E)  ctx.fillRect(x+TILE-I,y,1,TILE);
-}
-/* ---- village: cottages, thatch to the light, door onto the street ---- */
-function drawHouse(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  ctx.fillStyle=shade(FLOOR_BASE,-10); ctx.fillRect(x,y,TILE,TILE);
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x+1,y+7,TILE-2,TILE-7);
-  ctx.fillStyle=WALL_MID;  ctx.fillRect(x+2,y+8,TILE-4,TILE-9);
-  ctx.fillStyle=shade(WALL_MID,-26);                                 // timber framing
-  ctx.fillRect(x+2,y+12,TILE-4,1); ctx.fillRect(x+9,y+8,1,TILE-9);
-  ctx.fillStyle=WALL_DK;                                             // thatch
-  for(let i=0;i<7;i++) ctx.fillRect(x+i,y+7-i,TILE-i*2,1);
-  ctx.fillStyle=WALL_LT; for(let i=0;i<7;i++) ctx.fillRect(x+i,y+7-i,3,1);
-  if(!isWall(tx,ty+1)){                                              // door onto the street
-    ctx.fillStyle='#2a1a10'; ctx.fillRect(x+8,y+13,5,6);
-    ctx.fillStyle=C.yelD;    ctx.fillRect(x+11,y+16,1,1);
-  } else {
-    ctx.fillStyle=(h>0.5)?C.yel:'#20303a'; ctx.fillRect(x+7,y+13,5,4);
-    ctx.fillStyle='#000'; ctx.fillRect(x+9,y+13,1,4);
-  }
-  if(h>0.8){ ctx.fillStyle=WALL_DK; ctx.fillRect(x+14,y+1,3,4);      // chimney
-             ctx.fillStyle='rgba(220,220,230,0.35)'; ctx.fillRect(x+15,y,2,1); }
-  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(x,y+TILE-1,TILE,1);
-}
-/* ---- cavern: rough rock, lumpier than dressed stone ---- */
-function drawRock(ctx,tx,ty){
-  const x=tx*TILE, y=ty*TILE, h=hash(tx,ty);
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  pxDisc(ctx,x+10,y+10,9,WALL_MID);
-  pxDisc(ctx,x+8,y+7,4,WALL_LT);
-  ctx.fillStyle=WALL_DK;
-  ctx.fillRect(x+3+((h*9)|0),y+13,3,2); ctx.fillRect(x+12,y+4+((h*6)|0),2,3);
-  if(h>0.85){ ctx.fillStyle=shade(WALL_LT,60); ctx.fillRect(x+9,y+9,2,2); }  // a glint of crystal
-  ctx.fillStyle='#000';                              // the hard seam every wall needs
-  if(!isWall(tx,ty-1)) ctx.fillRect(x,y,TILE,1);
-  if(!isWall(tx,ty+1)) ctx.fillRect(x,y+TILE-1,TILE,1);
-  if(!isWall(tx-1,ty)) ctx.fillRect(x,y,1,TILE);
-  if(!isWall(tx+1,ty)) ctx.fillRect(x+TILE-1,y,1,TILE);
+  if(h>0.8){ ctx.fillStyle=shade(FLOOR_BASE,10); ctx.fillRect(x+13,y+12,5,4);          // a rock
+             ctx.fillStyle=shade(FLOOR_BASE,30); ctx.fillRect(x+13,y+12,5,1); }
+  /* the banks: a pale lip of dry land, and below it the bank's face dropping into the water */
+  const bank=shade(FLOOR_BASE,26), drop=shade(WALL_DK,-34);
+  if(!s.N){ ctx.fillStyle=bank; ctx.fillRect(x,y,TILE,2); ctx.fillStyle=drop; ctx.fillRect(x,y+2,TILE,3); }
+  if(!s.W){ ctx.fillStyle=bank; ctx.fillRect(x,y,2,TILE); ctx.fillStyle=drop; ctx.fillRect(x+2,y,2,TILE); }
+  if(!s.S){ ctx.fillStyle=bank; ctx.fillRect(x,y+TILE-2,TILE,2); ctx.fillStyle=drop; ctx.fillRect(x,y+TILE-3,TILE,1); }
+  if(!s.E){ ctx.fillStyle=bank; ctx.fillRect(x+TILE-2,y,2,TILE); ctx.fillStyle=drop; ctx.fillRect(x+TILE-3,y,1,TILE); }
 }
 function drawWall(ctx,tx,ty){
   if(theme.kind==='forest') return drawTree(ctx,tx,ty);
   if(theme.kind==='water')  return drawWater(ctx,tx,ty);
-  if(theme.kind==='desert') return drawRuin(ctx,tx,ty);
-  if(theme.kind==='cavern') return drawRock(ctx,tx,ty);
-  if(theme.kind==='castle') return drawCastle(ctx,tx,ty);
-  if(theme.kind==='laby')   return drawLaby(ctx,tx,ty);
-  if(theme.kind==='village')return drawHouse(ctx,tx,ty);
-  if(theme.kind==='palace') return drawPalace(ctx,tx,ty);
-  /* A course of masonry: black ground, a slab inset from any open side, brick
-     courses across its face, a lit top-and-left edge and a dark plinth at the
-     foot. The slab runs flush into its neighbours so a run of wall reads as one
-     continuous ribbon rather than a row of separate tiles. */
-  const x=tx*TILE, y=ty*TILE, I=3;
-  ctx.fillStyle=WALL_BASE; ctx.fillRect(x,y,TILE,TILE);
-  const N=isWall(tx,ty-1),So=isWall(tx,ty+1),E=isWall(tx+1,ty),W=isWall(tx-1,ty);
-  const x0=W?x:x+I, x1=E?x+TILE:x+TILE-I, y0=N?y:y+I, y1=So?y+TILE:y+TILE-I;
-  const w=x1-x0, h=y1-y0;
-  ctx.fillStyle=WALL_DK;  ctx.fillRect(x0,y0,w,h);
-  ctx.fillStyle=WALL_MID; ctx.fillRect(x0,y0,w-1,h-1);
-  // brick courses, every fifth row, offset alternately like real bonding
-  ctx.fillStyle=shade(WALL_MID,-26);
-  for(let by=y0+4; by<y1-1; by+=5){
-    ctx.fillRect(x0,by,w-1,1);
-    const off=(((by/5)|0)%2)?4:10;
-    for(let bx=x0+off; bx<x1-2; bx+=10) ctx.fillRect(bx,by-4,1,4);
-  }
-  ctx.fillStyle=shade(WALL_MID,16);                  // a little grit on the face
-  for(let i=0;i<5;i++){
-    const hx=x0+((hash(tx*3+i,ty*7)*Math.max(1,w-2))|0);
-    const hy=y0+((hash(ty*5+i,tx*11)*Math.max(1,h-2))|0);
-    ctx.fillRect(hx,hy,1,1);
-  }
-  /* Light the edges of the RUN, not of every tile: a highlight on each tile
-     turns a corridor wall into a stack of separate bricks. */
-  ctx.fillStyle=WALL_LT;
-  if(!N) ctx.fillRect(x0,y0,w-1,1);                  // lit crest
-  if(!W) ctx.fillRect(x0,y0,1,h-1);                  // lit left flank
-  ctx.fillStyle=shade(WALL_DK,-18);
-  if(!So) ctx.fillRect(x0,y1-2,w,2);                 // plinth only at the foot
-  if(!E)  ctx.fillRect(x1-2,y0,2,h);                 // and a shaded right flank
-  ctx.fillStyle='#000';
-  if(!N)  ctx.fillRect(x,y+I-1,TILE,1);
-  if(!So) ctx.fillRect(x,y+TILE-I,TILE,1);
-  if(!W)  ctx.fillRect(x+I-1,y,1,TILE);
-  if(!E)  ctx.fillRect(x+TILE-I,y,1,TILE);
+  block(ctx,tx,ty,PAINT[theme.kind]||PAINT.stone);
 }
 /* Walls are lit from the upper left and stand proud of the floor, so each one
    throws a hard shadow down and to the right. Laying that shadow on the floor
    before the walls go down is what gives the maze its height - it is the single
    biggest difference between a flat tilemap and the arcade look. */
-const SH_DEEP='rgba(0,0,0,0.46)', SH_SOFT='rgba(0,0,0,0.20)', SH_DROP=5;
+const SH_DEEP='rgba(0,0,0,0.62)', SH_SOFT='rgba(0,0,0,0.30)', SH_DROP=7;
 /* Canvas arcs and ellipses are anti-aliased, which puts half-tone fringe pixels
    into a game built entirely from hard ones. Everything round is stepped by hand
    instead, on the same whole-pixel grid as the sprites. */
@@ -2479,6 +2492,15 @@ function pxRing(c,cx,cy,r,col,step){
   }
 }
 function castShadows(c){
+  if(theme.kind==='water'){                      // sunken: the bank shadows the water below and right of it
+    for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
+      if(!isWall(x,y)) continue;
+      const px=x*TILE, py=y*TILE;
+      if(!isWall(x,y-1)){ c.fillStyle=SH_DEEP; c.fillRect(px,py+2,TILE,4); c.fillStyle=SH_SOFT; c.fillRect(px,py+6,TILE,2); }
+      if(!isWall(x-1,y)){ c.fillStyle=SH_DEEP; c.fillRect(px+2,py,3,TILE); c.fillStyle=SH_SOFT; c.fillRect(px+5,py,2,TILE); }
+    }
+    return;
+  }
   for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
     if(isWall(x,y)) continue;                    // shadows only fall on open ground
     const px=x*TILE, py=y*TILE;
