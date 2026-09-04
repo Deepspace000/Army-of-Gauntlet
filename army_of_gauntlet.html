@@ -52,7 +52,8 @@
   #allybox .sub{font-size:9px;color:#5a5a6a;font-style:italic}
   #allybox.active{border-color:#ffd23c}
   #allybox.active .nm{color:#ffd23c}
-  #company{image-rendering:pixelated;margin:4px auto 0;display:block}
+  #company{image-rendering:pixelated;margin:4px auto 0;display:block;cursor:pointer}
+  #lives{cursor:pointer}
   /* ------------------------------------------- the gate between two floors */
   #gate{position:absolute;left:0;top:0;width:560px;height:560px;z-index:8;
         background:#000;border-radius:4px 0 0 4px;text-align:center;
@@ -163,6 +164,22 @@
         padding:14px 0}
   .pu .pips{margin-top:0}
   #pauseHint{font-size:10px;color:#8a7aa8;font-style:italic;margin-top:12px}
+  #pauseMenu{display:flex;gap:14px;margin-top:14px}
+  .pbtn{font-family:"Courier New",monospace;font-size:12px;font-weight:bold;letter-spacing:2px;
+        padding:6px 16px;border-radius:3px;cursor:pointer;color:#ffd23c;
+        background:rgba(46,26,64,.9);border:1px solid rgba(255,210,120,.6)}
+  .pbtn:hover,.pbtn.padsel{border-color:#ffd23c;background:#3a1a54;box-shadow:0 0 12px rgba(255,210,60,.7)}
+  .pbtn.quit{color:#ff8a6a}
+  .pbtn.quit:hover,.pbtn.quit.padsel{border-color:#ff8a6a;box-shadow:0 0 12px rgba(255,120,90,.7)}
+  /* the gamepad cursor: whichever card, champion or button the pad is resting on */
+  .card.padsel,.buy.padsel,.sc.padsel{outline:2px solid #ffd23c;outline-offset:2px;
+        filter:brightness(1.15)}
+  #super.tonic .sc.padsel{outline-color:#c98cff}
+  #padTag{position:absolute;right:8px;bottom:6px;z-index:12;font-family:"Courier New",monospace;
+        font-size:9px;color:#5a5a6a;letter-spacing:1px;pointer-events:none;opacity:.85;
+        transition:color .4s}
+  #padTag.on{color:#8cf07a}
+  #padTag.no{color:#ff8a6a}
   /* ------------------------------------------------------ experience bar */
   #xpbox{margin:6px 8px 0;text-align:left}
   #xptop{display:flex;justify-content:space-between;font-family:"Courier New",monospace;
@@ -336,7 +353,7 @@
       <div class="sub" id="allySub">nobody with you yet</div>
       <canvas id="company" width="148" height="120"></canvas>
     </div>
-    <div id="keys">arrows / WASD &nbsp;move &amp; aim<br>space&nbsp;fire &nbsp; B&nbsp;potion &nbsp; H&nbsp;heal &nbsp; P&nbsp;pause</div>
+    <div id="keys">arrows / WASD &nbsp;move &amp; aim<br>space&nbsp;fire &nbsp; B&nbsp;potion &nbsp; H&nbsp;heal &nbsp; P&nbsp;pause<br>click a follower here or on the floor to lead them</div>
   </div>
   <div id="msg"><span id="msgMain"></span><small id="msgSub"></small></div>
 
@@ -365,7 +382,7 @@
     <canvas id="titleRow" width="380" height="26"></canvas>
     <div class="tscore"><span id="tlast"></span>High Score <b id="thi">021270</b></div>
     <div class="tprompt">PRESS ANY KEY</div>
-    <div class="tsub" style="margin-top:10px">S &nbsp;sprite sheet</div>
+    <div class="tsub" style="margin-top:10px">S &nbsp;sprite sheet &nbsp;-&nbsp; gamepad: stick walks, right stick aims, START pauses</div>
   </div>
 
   <div id="fallen" class="hidden">
@@ -379,8 +396,13 @@
   <div id="pause" class="hidden">
     <h2>PAUSED</h2>
     <div id="pauseList"></div>
-    <div id="pauseHint">ESC or P to resume</div>
+    <div id="pauseMenu">
+      <div class="pbtn" id="pauseResume">RESUME</div>
+      <div class="pbtn quit" id="pauseQuit">QUIT TO TITLE</div>
+    </div>
+    <div id="pauseHint">ESC or P to resume &nbsp;-&nbsp; Q to quit</div>
   </div>
+  <div id="padTag">GAMEPAD: press any button</div>
 
   <div id="super" class="hidden">
     <h2>WHICH CHARACTER GETS THE SUPERCHARGE?</h2>
@@ -430,7 +452,10 @@ const ZOOM = 2;                            /* fourteen tiles across, cleanly */
 /* movement tuning: base pace scaled to 45%, monsters run at 90% of the elf */
 const SPEED_SCALE = 0.45;
 const PLAYER_SPEED = 1.7 * SPEED_SCALE;
-const ENEMY_SPEED  = PLAYER_SPEED * 0.9;
+const ENEMY_PACE   = 0.6;                         // every monster and lord moves at 60% of the old pace
+const ENEMY_SPEED  = PLAYER_SPEED * 0.9 * ENEMY_PACE;
+const ENEMY_ANIM   = Math.round(9/ENEMY_PACE);        // frames per animation step (was 9)
+const ENEMY_STRIDE = Math.round(8/ENEMY_PACE);        // walk ticks per stride frame (was 8)
 const SHOT_SPEED   = 5.2 * SPEED_SCALE;
 const ELIXIR_MAX   = 5;        /* health draughts you can carry at once */
 const HEAL_MAX     = 3;        /* golden draughts you can carry at once */
@@ -649,11 +674,36 @@ function shade(hex,amt){
                    : (v=>Math.max(0,Math.round(v*(1-k))));
   return '#'+[f(r),f(g),f(b)].map(v=>v.toString(16).padStart(2,'0')).join('');
 }
+/* Every baked sprite is remembered as raw pixels. Chrome empties off-screen
+   canvases whenever its GPU process restarts (driver hiccup, overlay hooking
+   in, sleep/wake), and the game would carry on drawing nothing but the floor.
+   A sentinel is checked now and then; if it has gone blank, everything is
+   painted back from the copies.                                              */
+const BAKED=[];
+function keep(cv){
+  try{ const x=cv.getContext('2d'); BAKED.push({cv,img:x.getImageData(0,0,cv.width,cv.height)}); }catch(e){}
+  return cv;
+}
+function bakedLost(){
+  for(const b of BAKED){                          // first sprite that should have pixels
+    const d=b.img.data; let any=false;
+    for(let i=3;i<d.length;i+=4) if(d[i]){ any=true; break; }
+    if(!any) continue;
+    const now=b.cv.getContext('2d').getImageData(0,0,b.cv.width,b.cv.height).data;
+    for(let i=3;i<now.length;i+=4) if(now[i]) return false;
+    return true;
+  }
+  return false;
+}
+function restoreBaked(){
+  for(const b of BAKED){ try{ b.cv.getContext('2d').putImageData(b.img,0,0); }catch(e){} }
+  hudHero=null; hudAlly=null; hotDirty=true;      // the HUD icons are copies too
+}
 function bake(g){
   const cv=document.createElement('canvas'); cv.width=g.w; cv.height=g.h;
   const x=cv.getContext('2d');
   for(let y=0;y<g.h;y++) for(let i=0;i<g.w;i++){ const c=g.get(i,y); if(c){ x.fillStyle=c; x.fillRect(i,y,1,1);} }
-  return cv;
+  return keep(cv);
 }
 function S(fn){ const g=new Grid(20,20); fn(g); return bake(g); }
 /* Actors are drawn on a 28-pixel grid and overhang their 20-pixel tile, the way
@@ -662,12 +712,12 @@ const ACT=28, ACT_H=14;
 function SA(fn){ const g=new Grid(ACT,ACT); fn(g); return bake(g); }
 function flipX(cv){
   const o=document.createElement('canvas'); o.width=cv.width; o.height=cv.height;
-  const x=o.getContext('2d'); x.translate(cv.width,0); x.scale(-1,1); x.drawImage(cv,0,0); return o;
+  const x=o.getContext('2d'); x.translate(cv.width,0); x.scale(-1,1); x.drawImage(cv,0,0); return keep(o);
 }
 function rot(cv,a){
   const o=document.createElement('canvas'); o.width=cv.width; o.height=cv.height;
   const x=o.getContext('2d'); x.translate(cv.width/2,cv.height/2); x.rotate(a);
-  x.drawImage(cv,-cv.width/2,-cv.height/2); return o;
+  x.drawImage(cv,-cv.width/2,-cv.height/2); return keep(o);
 }
 
 /* ------------------------------------------------------------------ heroes */
@@ -2921,6 +2971,10 @@ addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   keys[k]=true;
   if([' ','arrowup','arrowdown','arrowleft','arrowright'].indexOf(k)>=0) e.preventDefault();
+  handleKey(k);
+});
+/* one door for every press, whether it came from the keyboard or a gamepad */
+function handleKey(k){
   if(mode==='gate'){ passGate(); return; }        // any key opens the floor
   if(mode==='sheet'){ if(k==='escape') closeSheet(); else if(k==='s') openSheet(); return; }
   if(mode==='title'){ if(k==='s') openSheet();                       // any other key starts the game
@@ -2956,13 +3010,166 @@ addEventListener('keydown',e=>{
     if(k==='b') startWithEveryone();          // b for bring everyone
     return;
   }
+  if(paused){                              // the pause menu: resume, or walk away
+    if(k==='p'||k==='escape'||k==='enter') togglePause();
+    else if(k==='q') quitRun();
+    return;
+  }
   if(k==='p'||k==='escape') togglePause();
   if(k==='b'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='potion'); if(i>=0) useSlot(i); }
   if(k==='h'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='elixir'); if(i>=0) useSlot(i); }
   if(k==='g'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='heal'); if(i>=0) useSlot(i); }
   if(k>='1'&&k<='6') useSlot(+k-1);
-});
+}
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+
+/* ------------------------------------------------------------------ gamepad
+   Standard-layout pad. Left stick or d-pad walks, right stick aims and fires
+   (twin-stick), A fires, B/X/Y drink potion/elixir/heal, bumpers hand the lead
+   to the next follower, Start pauses. In any menu the d-pad or stick moves a
+   cursor and A confirms, B backs out. Everything routes through handleKey so
+   the two input methods can never disagree about what a press means.        */
+const pad={x:0,y:0,fire:false,aim:null,on:false};
+const padTag=document.getElementById('padTag');
+let padPrev=[], padNavPrev={}, padNavAt={}, padCursor=0, padMode='', padLeaderIx=0, padIdx=-1;
+const PAD_DEAD=0.35, PAD_REPEAT0=340, PAD_REPEAT=110;
+let padName='';
+function padAttach(gp){
+  padIdx=gp.index; pad.on=true; padTag.className='on';
+  padName=(gp.id||'connected').replace(/\s*\(.*$/,'').slice(0,22)+(gp.mapping==='standard'?'':' [raw]');
+  padTag.textContent='GAMEPAD: '+padName;
+  if(mode==='play') showMsg('GAMEPAD CONNECTED',gp.id.slice(0,40));
+}
+function padDetach(){
+  padIdx=-1; pad.on=false; padTag.className=''; padTag.textContent='GAMEPAD: press any button';
+  pad.x=pad.y=0; pad.fire=false; pad.aim=null; padPrev=[];
+}
+addEventListener('gamepadconnected',e=>{ if(e.gamepad&&padIdx<0) padAttach(e.gamepad); });
+addEventListener('gamepaddisconnected',e=>{ if(e.gamepad&&e.gamepad.index===padIdx) padDetach(); });
+/* Browsers keep a pad invisible until a button is pressed, and the connect
+   event is easy to miss, so every frame we simply look for one ourselves. */
+function padScan(){
+  let list;
+  try{ list=navigator.getGamepads?navigator.getGamepads():null; }
+  catch(e){ padTag.className='no'; padTag.textContent='GAMEPAD: blocked here - open in Chrome/Edge'; return null; }
+  if(!list) return null;
+  if(padIdx>=0){ const g=list[padIdx]; if(g&&g.connected!==false) return g; padDetach(); }
+  for(const g of list) if(g&&g.connected!==false&&g.buttons&&g.buttons.length){ padAttach(g); return g; }
+  /* Chrome keeps every pad hidden until the page itself has been clicked or
+     typed into - a pad press alone never counts. Say so. */
+  if(frame%30===0 && pad.on===false){
+    const needClick = navigator.userActivation && !navigator.userActivation.hasBeenActive;
+    padTag.textContent = needClick ? 'GAMEPAD: click the game first, then press any button'
+                                   : 'GAMEPAD: press any button';
+  }
+  return null;
+}
+function padMenuRow(){
+  if(mode==='cards') return cardRow;
+  if(mode==='shop')  return shopRow;
+  if(mode==='super'||mode==='heal') return superRow;
+  if(mode==='play'&&paused) return document.getElementById('pauseMenu');
+  return null;
+}
+function padHighlight(){
+  const row=padMenuRow(); if(!row) return;
+  const n=row.children.length; if(!n) return;
+  padCursor=((padCursor%n)+n)%n;
+  for(let i=0;i<n;i++) row.children[i].classList.toggle('padsel',pad.on&&i===padCursor);
+}
+function padConfirm(){
+  if(mode==='cards') takeCard(padCursor);
+  else if(mode==='shop') buyCard(padCursor);
+  else if(mode==='super') grantSupercharge(padCursor);
+  else if(mode==='heal') grantHeal(padCursor);
+  else if(mode==='play'&&paused){ if(padCursor===1) quitRun(); else togglePause(); }
+}
+function padCycleLeader(dir){
+  const list=allies.filter(a=>a.member&&!a.down);
+  if(!list.length){ showMsg('NO FOLLOWERS','nobody to hand the lead to'); return; }
+  padLeaderIx=((padLeaderIx+dir)%list.length+list.length)%list.length;
+  switchLeader(list[padLeaderIx]);
+}
+function pollPad(){
+  const gp=padScan(); if(!gp) return;
+  const bt=gp.buttons.map(b=>b.pressed), ax=gp.axes;
+  const down=i=>!!bt[i], hit=i=>bt[i]&&!padPrev[i];
+  /* walking: stick or d-pad, snapped to eight ways. Pads without the standard
+     mapping put the d-pad on a hat axis (usually axes[9]) - read that too. */
+  const lx=ax[0]||0, ly=ax[1]||0;
+  let hx=0, hy=0;
+  if(gp.mapping!=='standard' && ax.length>9 && Math.abs(ax[9])<=1 && ax[9]!==0){
+    const h=Math.round((ax[9]+1)*3.5);           // 8 positions, 0=up clockwise, 7 or beyond=centre
+    if(h>=0&&h<8){ hx=[0,1,1,1,0,-1,-1,-1][h]; hy=[-1,-1,0,1,1,1,0,-1][h]; }
+  }
+  pad.x = down(14)?-1 : down(15)?1 : hx || (Math.abs(lx)>PAD_DEAD?Math.sign(lx):0);
+  pad.y = down(12)?-1 : down(13)?1 : hy || (Math.abs(ly)>PAD_DEAD?Math.sign(ly):0);
+  /* aiming: the right stick, when pushed, points the attack and fires it.
+     Non-standard pads sometimes report it on axes 2/5 or 3/4. */
+  let rx=ax[2]||0, ry=ax[3]||0;
+  if(gp.mapping!=='standard' && ax.length>=6 && Math.hypot(rx,ry)<0.5){
+    if(Math.hypot(ax[2]||0,ax[5]||0)>0.5){ rx=ax[2]; ry=ax[5]; }
+    else if(Math.hypot(ax[3]||0,ax[4]||0)>0.5){ rx=ax[3]; ry=ax[4]; }
+  }
+  /* live readout in the corner so a pad that misbehaves can be diagnosed */
+  if(frame%10===0){
+    const pressed=[]; bt.forEach((b,i)=>{ if(b) pressed.push(i); });
+    padTag.textContent='GAMEPAD: '+padName+'  L '+lx.toFixed(1)+','+ly.toFixed(1)+
+      '  R '+rx.toFixed(1)+','+ry.toFixed(1)+(pressed.length?'  btn '+pressed.join(','):'');
+  }
+  pad.aim = Math.hypot(rx,ry)>0.5 ? dirFromVec(rx,ry) : null;
+  pad.fire = down(0)||down(7)||!!pad.aim;
+  /* menu cursor with auto-repeat */
+  const now=Date.now(), nav={left:pad.x<0,right:pad.x>0,up:pad.y<0,down:pad.y>0}, step={};
+  for(const d in nav){
+    if(!nav[d]){ padNavPrev[d]=false; continue; }
+    if(!padNavPrev[d]){ step[d]=true; padNavAt[d]=now+PAD_REPEAT0; }
+    else if(now>=padNavAt[d]){ step[d]=true; padNavAt[d]=now+PAD_REPEAT; }
+    padNavPrev[d]=true;
+  }
+  if(mode!==padMode){ padMode=mode; padCursor=0; }
+  const any=hit(0)||hit(1)||hit(2)||hit(3)||hit(9);
+  if(mode==='title'){ if(hit(8)) handleKey('s'); else if(any) handleKey('enter'); }
+  else if(mode==='sheet'){ if(hit(8)) handleKey('s'); else if(hit(0)||hit(1)||hit(9)) handleKey('escape'); }
+  else if(mode==='gate'||mode==='fallen'){ if(any) handleKey('enter'); }
+  else if(mode==='select'){
+    if(step.left) moveSelect(-1,0); if(step.right) moveSelect(1,0);
+    if(step.up) moveSelect(0,-1);   if(step.down) moveSelect(0,1);
+    if(hit(0)||hit(9)) startGame();
+    if(hit(8)||hit(3)) startWithEveryone();
+  }
+  else if(padMenuRow()){                       // cards, shop, supercharge, tonic, pause
+    const row=padMenuRow(), n=row.children.length;
+    const cols = mode==='shop' ? 2 : n;         // the merchant lays cards in two columns
+    if(step.left)  padCursor--;
+    if(step.right) padCursor++;
+    if(step.up)    padCursor-=cols;
+    if(step.down)  padCursor+=cols;
+    if(n) padCursor=((padCursor%n)+n)%n;
+    if(hit(0)) padConfirm();
+    if(hit(1)){ if(mode==='shop') closeShop(); else if(mode==='play'&&paused) togglePause(); }
+    if(hit(9)&&mode==='play') togglePause();
+    padHighlight();
+  }
+  else if(mode==='play'&&!dead){
+    if(hit(9)) togglePause();
+    if(hit(1)) handleKey('b');
+    if(hit(2)) handleKey('h');
+    if(hit(3)) handleKey('g');
+    if(hit(4)) padCycleLeader(-1);
+    if(hit(5)) padCycleLeader(1);
+    if(hit(6)){ const i=hotbar.findIndex(sl=>sl); if(i>=0) useSlot(i); }   // LT: first thing in the belt
+  }
+  if(any && AC && AC.state==='suspended') AC.resume().catch(()=>{});
+  padPrev=bt;
+}
+/* a short buzz through the pad when the hero is struck */
+function padRumble(ms,strong){
+  if(padIdx<0||!navigator.getGamepads) return;
+  const gp=navigator.getGamepads()[padIdx];
+  const act=gp&&(gp.vibrationActuator||(gp.hapticActuators&&gp.hapticActuators[0]));
+  if(act&&act.playEffect) act.playEffect('dual-rumble',{duration:ms,strongMagnitude:strong,weakMagnitude:strong*0.6}).catch(()=>{});
+}
 
 /* ==========================================================================
    THE HOTBAR
@@ -3436,9 +3643,21 @@ function renderPause(){
 function togglePause(){
   if(mode!=='play') return;
   paused=!paused;
-  if(paused){ renderPause(); pauseEl.className=''; }
+  if(paused){ renderPause(); pauseEl.className=''; padCursor=0; padHighlight(); }
   else pauseEl.className='hidden';
 }
+/* walk away from the run: the score still counts, the title takes you back */
+function quitRun(){
+  if(mode!=='play'||!paused) return;
+  hi=Math.max(hi,score); lastScore=score;
+  dead=true; paused=false;
+  cardsEl.className='hidden'; pauseEl.className='hidden'; fallenEl.className='hidden';
+  shopEl.className='hidden'; superEl.className='hidden'; gateEl.className='hidden';
+  showTitle('LEFT THE DUNGEON ON FLOOR '+level);
+  beep(330,0.15,'square',0.05); beep(220,0.3,'triangle',0.05);
+}
+document.getElementById('pauseResume').onclick=()=>{ if(paused) togglePause(); };
+document.getElementById('pauseQuit').onclick=quitRun;
 function takeCard(i){
   const c=offered[i]; if(!c) return;
   showMsg(c.tt.toUpperCase(),c.ds);            // first, so a card can speak over it
@@ -4031,10 +4250,10 @@ function update(){
   if(player.slowT>0) player.slowT--;
 
   let dx=0,dy=0;
-  if(keys['arrowleft']||keys['a']) dx=-1;
-  if(keys['arrowright']||keys['d']) dx=1;
-  if(keys['arrowup']||keys['w']) dy=-1;
-  if(keys['arrowdown']||keys['s']) dy=1;
+  if(keys['arrowleft']||keys['a']||pad.x<0) dx=-1;
+  if(keys['arrowright']||keys['d']||pad.x>0) dx=1;
+  if(keys['arrowup']||keys['w']||pad.y<0) dy=-1;
+  if(keys['arrowdown']||keys['s']||pad.y>0) dy=1;
   const PH=HERO[player.cls];
   idleT = (dx||dy) ? 0 : idleT+1;                 // standing perfectly still
   if(idleT===IDLE_DOORS) openAllDoors();
@@ -4091,19 +4310,20 @@ function update(){
     if(best){ player.aim=dirFromVec(best.x-player.x,best.y-player.y);
               player.dir=spriteDir(player.aim); }
   }
+  if(pad.aim){ player.aim=pad.aim; player.dir=spriteDir(pad.aim); player.face=pad.aim; }   // right stick overrides
   if(player.cool<=0){
     const cd=Math.max(3,Math.round(PH.rate*FIRE_MULT*up.atkRate));
     let swung=false, aimed=null;
     if(PH.group==='melee'){                       // the blade first, missiles only if granted
       const near=targetInReach(player);
       const lock=up.extraProj>0 ? autoAim(player,150) : null;
-      if(near||keys[' ']){ player.cool=cd; meleeSwing(player); if(lock) fire(player,lock);
+      if(near||keys[' ']||pad.fire){ player.cool=cd; meleeSwing(player); if(lock) fire(player,lock);
                            swung=true; aimed=player.aim||player.dir; }
       else if(lock){ player.cool=cd; fire(player,lock); swung=true; aimed=lock; }
     } else {
       const lock=autoAim(player,Math.max(60,PH.rng));               // auto-aim at monsters
       if(lock){ player.cool=cd; fire(player,lock); swung=true; aimed=lock; }
-      else if(keys[' ']){ player.cool=cd; fire(player,player.aim||player.dir);
+      else if(keys[' ']||pad.fire){ player.cool=cd; fire(player,player.aim||player.dir);
                           swung=true; aimed=player.aim||player.dir; }
     }
     if(swung){
@@ -4176,7 +4396,7 @@ function update(){
     const ddx=tgt.x-e.x, ddy=tgt.y-e.y, ax=Math.abs(ddx), ay=Math.abs(ddy);
 
     if(frozenT>0){                                  // held fast: no step, no bite
-      if(frame%9===0) e.frame^=1;
+      if(frame%ENEMY_ANIM===0) e.frame^=1;
       if(e.hurt>0) e.hurt--;
       if(e.wardCd>0) e.wardCd--;
       continue;
@@ -4188,7 +4408,7 @@ function update(){
       let mx=0,my=0;
       if(ax>ay){ mx=Math.sign(ddx)*e.sp; if(blocked(e.x+mx,e.y,e.r)){ mx=0; my=(Math.sign(ddy)||1)*e.sp; } }
       else     { my=Math.sign(ddy)*e.sp; if(blocked(e.x,e.y+my,e.r)){ my=0; mx=(Math.sign(ddx)||1)*e.sp; } }
-      if(e.kind==='ghost'){ e.wob+=0.12; mx+=Math.cos(e.wob)*0.25; my+=Math.sin(e.wob*1.3)*0.25; }
+      if(e.kind==='ghost'){ e.wob+=0.12*ENEMY_PACE; mx+=Math.cos(e.wob)*0.25*ENEMY_PACE; my+=Math.sin(e.wob*1.3)*0.25*ENEMY_PACE; }
       /* Nobody walks into the monster ahead: if the step would press into one,
          try the other axis, else wait. That is what turns a crowd into a queue
          that fills the nearest passage instead of a heap. */
@@ -4214,7 +4434,7 @@ function update(){
       const dd=Math.hypot(ddx,ddy);
       if(dd<RG.range && dd>26){ e.shootCd=RG.cd; monsterFire(e,tgt,RG.k); }
     }
-    if(frame%(e.kind==='zombie'?16:9)===0) e.frame^=1;
+    if(frame%(e.kind==='zombie'?Math.round(16/ENEMY_PACE):ENEMY_ANIM)===0) e.frame^=1;
     if(e.hurt>0) e.hurt--;
     if(e.wardCd>0) e.wardCd--;
     if(e.touch>0) e.touch--;
@@ -4652,6 +4872,7 @@ function hurt(n,silent){
   if(party[0]&&party[0].super) return;          // supercharged: nothing touches them
   n=Math.round(n*(1-0.1*(up.ward||0)));         // Bulwark absorbs a share
   player.hp-=n;
+  if(frame%6===0) padRumble(90,Math.min(1,0.3+n/40));
   party[0].hp=player.hp;
   if(!silent&&frame%6===0) beep(140,0.06,'sawtooth',0.05);
   if(player.hp>0 && player.hp<=player.maxHp*0.25) tryCleric();
@@ -4908,7 +5129,7 @@ function draw(){
       const w=BOSS_PX, bx=Math.round(e.x)-w/2, by=Math.round(e.y)-w/2;
       const set=(BOSS_SPR[e.bi]&&BOSS_SPR[e.bi][e.cyc||0])||[SPR.demon[0],SPR.demon[1]];
       const moving=(frame-(e.movedAt||-99))<3;
-      const bimg = set.f8 ? set.f8[FACE_IDX[e.face||'down']||0][moving ? ((e.walk||0)>>3)&3 : 1] : set[e.frame];
+      const bimg = set.f8 ? set.f8[FACE_IDX[e.face||'down']||0][moving ? Math.floor((e.walk||0)/ENEMY_STRIDE)&3 : 1] : set[e.frame];
       castShadow(bimg,e.x,e.y,w/2,w/bimg.width);
       ctx.globalAlpha = e.hurt>0?0.6:1;
       ctx.drawImage(bimg,bx,by,w,w);
@@ -4924,7 +5145,7 @@ function draw(){
     let img = set[e.frame], half=ACT_H;
     if(MSPR[e.kind]){                                          // the new eight-way monsters
       const moving=(frame-(e.movedAt||-99))<3;
-      img=MSPR[e.kind].f8[FACE_IDX[e.face||'down']||0][moving ? ((e.walk||0)>>3)&3 : 1]; half=HUM_H;
+      img=MSPR[e.kind].f8[FACE_IDX[e.face||'down']||0][moving ? Math.floor((e.walk||0)/ENEMY_STRIDE)&3 : 1]; half=HUM_H;
     }
     const ghostly = e.kind==='ghost'||e.kind==='blackghost';
     if(!ghostly) castShadow(img,e.x,e.y,half);                 // a ghost throws none
@@ -5057,6 +5278,7 @@ function drawCompany(){
   while(cell>7 && Math.ceil(n/cols)*(cell+4) > H){
     cell--; cols=Math.max(1,Math.floor(W/cell));
   }
+  compCell=cell; compCols=cols;                   // kept for the click that picks a follower
   party.forEach((m,i)=>{
     const cx=(i%cols)*cell, cy=Math.floor(i/cols)*(cell+4);
     const sz=cell-2;
@@ -5064,6 +5286,10 @@ function drawCompany(){
       compCtx.fillStyle='rgba(57,210,74,0.18)'; compCtx.fillRect(cx,cy,sz,sz);
     } else if(i===1){                             // your heir: gold ring
       compCtx.fillStyle='rgba(255,210,60,0.16)'; compCtx.fillRect(cx,cy,sz,sz);
+    }
+    if(i>0 && i===compHover){                     // under the mouse: a lit frame
+      compCtx.fillStyle='rgba(255,210,60,0.28)'; compCtx.fillRect(cx,cy,sz,sz);
+      compCtx.strokeStyle='#fff6c0'; compCtx.lineWidth=1; compCtx.strokeRect(cx+0.5,cy+0.5,sz-1,sz-1);
     }
     compCtx.drawImage(HSPR[m.cls].down[0],cx,cy,sz,sz);
     if(m.super){                                  // supercharged: a bright frame
@@ -5077,6 +5303,37 @@ function drawCompany(){
     if(i===0){ compCtx.fillStyle='#39d24a'; compCtx.fillRect(cx,cy+sz+2,sz,1); }
   });
 }
+/* ---------------------------------------------------- pick a follower from the side panel
+   Click a portrait in the company grid, or in the succession strip under the
+   health bar, and that champion takes the lead - the same swap as clicking
+   them on the floor.                                                          */
+let compCell=20, compCols=7, compHover=-1;
+function canvasPoint(cv,ev){
+  const r=cv.getBoundingClientRect();
+  return { x:(ev.clientX-r.left)*(cv.width/r.width), y:(ev.clientY-r.top)*(cv.height/r.height) };
+}
+function companyIndexAt(ev){
+  const q=canvasPoint(compCv,ev);
+  const col=Math.floor(q.x/compCell), row=Math.floor(q.y/(compCell+4));
+  if(col<0||col>=compCols||row<0) return -1;
+  const i=row*compCols+col;
+  return i<party.length ? i : -1;
+}
+function pickFromSide(i){
+  if(mode!=='play'||dead||paused||i<=0||i>=party.length) return;
+  const m=party[i], a=allyFor(m);
+  if(!a){ showMsg(HERO[m.cls].name.toUpperCase()+' IS NOT ON THE FLOOR','they cannot take the lead yet'); return; }
+  switchLeader(a);
+}
+compCv.addEventListener('mousemove',ev=>{ compHover=companyIndexAt(ev); });
+compCv.addEventListener('mouseleave',()=>{ compHover=-1; });
+compCv.addEventListener('mousedown',ev=>{ pickFromSide(companyIndexAt(ev)); ev.preventDefault(); });
+document.getElementById('lives').addEventListener('mousedown',ev=>{
+  const q=canvasPoint(ev.currentTarget,ev);
+  const i=Math.floor(q.x/16)+1;                   // the strip starts at the heir
+  if(i<=8) pickFromSide(i);
+  ev.preventDefault();
+});
 function drawHUD(){
   elScore.textContent=String(score).padStart(6,'0');
   elHealth.textContent=String(Math.max(0,player.hp)).padStart(4,'0');
@@ -5465,6 +5722,8 @@ fallenEl.onclick=resumeFromFall;
 
 /* -------------------------------------------------------------------- loop */
 function loop(){
+  pollPad();                                     // the pad is read every frame, menus included
+  if(frame%90===0 && bakedLost()){ restoreBaked(); if(mode==='play') showMsg('THE TORCHES RELIT','sprites restored'); }
   if(mode==='select'||mode==='title'||mode==='sheet'){ requestAnimationFrame(loop); return; }
   if(!paused&&!dead&&mode==='play') update();   // the world waits behind the gate
   draw(); drawHUD();
