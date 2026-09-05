@@ -53,6 +53,11 @@
   #allybox.active{border-color:#ffd23c}
   #allybox.active .nm{color:#ffd23c}
   #company{image-rendering:pixelated;margin:4px auto 0;display:block;cursor:pointer}
+  #p2box{border:2px solid #ff5a4a;border-radius:3px;margin:4px 6px 4px;padding:3px 0 4px}
+  #p2box.hidden{display:none}
+  #p2box .nm{font-size:11px;font-weight:bold;color:#ff8a6a}
+  #p2box .sub{font-size:8px;color:#a06a5a;font-style:italic}
+  #p2company{image-rendering:pixelated;margin:3px auto 0;display:block;cursor:pointer}
   #lives{cursor:pointer}
   /* ------------------------------------------- the gate between two floors */
   #gate{position:absolute;left:0;top:0;width:560px;height:560px;z-index:8;
@@ -175,6 +180,23 @@
   .card.padsel,.buy.padsel,.sc.padsel{outline:2px solid #ffd23c;outline-offset:2px;
         filter:brightness(1.15)}
   #super.tonic .sc.padsel{outline-color:#c98cff}
+  #codex{position:absolute;left:0;top:0;width:560px;height:560px;z-index:9;border-radius:4px 0 0 4px;overflow-y:auto;
+        background:radial-gradient(circle at 50% 20%,rgba(30,18,50,.98) 0%,rgba(6,4,12,.99) 70%);
+        font-family:"Courier New",monospace;color:#c0b0e0;font-size:10px;line-height:1.35;box-sizing:border-box;padding:10px 14px 30px}
+  #codex.hidden{display:none}
+  #codex h1{font-family:"Impact","Arial Black",sans-serif;font-size:22px;letter-spacing:4px;color:#ffd23c;margin:0 0 2px;font-weight:normal;text-align:center}
+  #codex .sub{text-align:center;color:#8a7aa8;font-style:italic;margin-bottom:10px}
+  #codex h2{font-family:"Impact","Arial Black",sans-serif;font-size:14px;letter-spacing:3px;color:#8cf07a;margin:14px 0 6px;font-weight:normal;
+            border-bottom:1px solid rgba(140,240,122,.3);padding-bottom:2px}
+  #codex p{margin:0 0 6px}
+  #codex .grid{display:flex;flex-wrap:wrap;gap:4px 8px}
+  #codex .ent{display:flex;align-items:center;gap:6px;width:246px;padding:2px 4px;border-radius:3px;background:rgba(40,26,64,.5);border:1px solid rgba(150,130,200,.25)}
+  #codex .ent canvas{image-rendering:pixelated;flex:0 0 auto;background:rgba(0,0,0,.35);border-radius:3px}
+  #codex .ent .nm{font-weight:bold;color:#ffd23c;font-size:10px}
+  #codex .ent .ds{font-size:9px;color:#b0a0d0;line-height:1.25}
+  #codex .ent.leg{border-color:#ff2a4a;background:rgba(90,10,20,.5)} #codex .ent.leg .nm{color:#ff6a6a}
+  #codex .ico{width:26px;text-align:center;font-family:"Segoe UI Symbol","Apple Symbols","DejaVu Sans",sans-serif;font-size:16px;color:#ffe9a8;flex:0 0 26px}
+  #codex .hint{position:sticky;top:0;text-align:right;font-size:9px;color:#8a7aa8;font-style:italic}
   #padSetup{position:absolute;left:0;top:0;width:560px;height:560px;z-index:9;border-radius:4px 0 0 4px;
         background:radial-gradient(circle at 50% 40%,rgba(16,32,58,.97) 0%,rgba(3,6,14,.98) 70%);
         display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
@@ -277,6 +299,10 @@
                    0 6px 14px rgba(0,0,0,.7);
         transition:transform .12s ease, box-shadow .12s ease, filter .12s ease}
   /* filigree corners, drawn with a second layer rather than images */
+  .card.k-leg{background:linear-gradient(165deg,#5a0a14 0%,#1c0408 55%,#3a0810 100%);border-color:#ff2a4a;
+              box-shadow:0 0 18px rgba(255,40,74,.55)}
+  .card.k-leg .tt{color:#ff6a6a} .card.k-leg .ds{color:#ffb0b8} .card.k-leg .ico{color:#ff2a4a;text-shadow:0 0 10px #ff2a4a}
+  .card.k-leg:hover{box-shadow:0 0 26px rgba(255,40,74,.85)}
   .card::before{content:'';position:absolute;inset:4px;border-radius:4px;pointer-events:none;
                 border:1px solid rgba(255,210,120,.28);
                 background:
@@ -303,6 +329,7 @@
   #select{position:absolute;left:0;top:0;width:560px;height:560px;background:#05050a;
           z-index:5;border-radius:4px 0 0 4px;overflow:hidden}
   #select.hidden{display:none}
+  #select.joinmode #startBtn,#select.joinmode #allBtn,#select.joinmode #p2bar,#select.joinmode #contWrap{display:none}
   #select h1{font-family:"Impact","Arial Black",sans-serif;font-size:17px;letter-spacing:2px;
              color:#ffd23c;text-align:center;margin:8px 0 4px;font-weight:normal}
   #grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;padding:0 3px}
@@ -313,27 +340,50 @@
   .cell canvas{image-rendering:pixelated;display:block;margin:0 auto}
   .cell span{display:block;font-size:8px;color:#9a9aaa;line-height:1.1;margin-top:1px}
   .cell:hover{background:#15151f}
-  .cell.sel{border-color:#39d24a;background:#0e2410}
+  .cell.sel{border-color:#39d24a;background:#0e2410;position:relative}
   .cell.sel span{color:#8cf07a}
-  #pick{position:absolute;left:0;bottom:52px;width:560px;text-align:center;
-        font-family:"Courier New",monospace}
-  #pickName{display:block;font-size:14px;color:#fff;font-weight:bold}
-  #pickStats{display:block;font-size:10px;color:#39d24a;margin-top:2px}
+  /* two players: player one's pick stays green and locked, player two chooses in red */
+  .cell.sel.p2{border-color:#ff5a4a;background:#2a0e0e}
+  .cell.sel.p2 span{color:#ff8a6a}
+  .cell.p1lock{border-color:#39d24a;background:#0e2410;position:relative}
+  .cell.p1lock span{color:#8cf07a}
+  .cell.sel.p1tag::after,.cell.p1lock::after{content:'P1';position:absolute;top:2px;right:3px;font-size:8px;font-weight:bold;color:#8cf07a}
+  .cell.sel.p2::after{content:'P2';position:absolute;top:2px;right:3px;font-size:8px;font-weight:bold;color:#ff8a6a}
+  .cell.sel.both{border-color:#39d24a;box-shadow:inset 0 0 0 2px #ff5a4a;background:#1c1a10}
+  .cell.sel.both::after{content:'P1 P2';position:absolute;top:2px;right:3px;font-size:8px;font-weight:bold;color:#ffd23c}
+  .cell.sel.ready{box-shadow:0 0 10px currentColor}
+  .cell.sel.p1tag.ready::after{content:'P1 ¹3'}
+  .cell.sel.p2.ready::after{content:'P2 ¹3'}
+  #pick{margin:8px 14px 0;padding:7px 8px;text-align:center;border-radius:4px;
+        font-family:"Courier New",monospace;background:rgba(40,26,64,.55);border:1px solid rgba(150,130,200,.35)}
+  #pickName{display:block;font-size:15px;color:#fff;font-weight:bold}
+  #pickStats{display:block;font-size:11px;color:#39d24a;margin-top:3px}
   #allBtn{position:absolute;right:10px;bottom:10px;
           font-family:"Courier New",monospace;letter-spacing:1px;font-size:10px;
           color:#ffd23c;background:rgba(40,28,10,.9);border:1px solid #a8862a;
           border-radius:3px;padding:6px 9px;cursor:pointer}
   #allBtn:hover{background:#4a3410;border-color:#ffd23c}
+  #titleBtns{display:flex;gap:8px;justify-content:center;margin-top:12px}
+  #titleBtns button{font-family:"Courier New",monospace;font-size:11px;font-weight:bold;letter-spacing:2px;padding:6px 14px;
+           border-radius:3px;cursor:pointer;color:#ffd23c;background:#2a1e0a;border:1px solid #7a5a1a}
+  #titleBtns button:hover{border-color:#ffd23c;background:#4a3410}
+  #titleBtns #infoBtn{color:#8cf07a;border-color:#39d24a;background:#0e2410}
+  #titleBtns #infoBtn:hover{background:#1a3a1a}
+  #infoBtn.locked,#infoBtn2.locked{color:#5a5a6a !important;border-color:#3a3a4a !important;background:#14141c !important;cursor:not-allowed}
   #p2bar{position:absolute;right:10px;bottom:40px;display:flex;gap:6px}
   #p2bar button{font-family:"Courier New",monospace;font-size:10px;font-weight:bold;letter-spacing:1px;padding:5px 8px;
            border-radius:3px;cursor:pointer;color:#ffd23c;background:#2a1e0a;border:1px solid #7a5a1a}
   #p2bar button.on{color:#8cf07a;border-color:#39d24a;background:#0e2410}
   #p2bar button:hover{border-color:#ffd23c}
-  #contList{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column-reverse;gap:3px;width:152px}
+  #contWrap{position:absolute;left:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;width:160px}
+  #contList,#contList2{display:flex;flex-direction:column-reverse;gap:3px}
+  #contList .conth,#contList2 .conth{font-family:"Courier New",monospace;font-size:8px;letter-spacing:2px;color:#5a7a9a;order:99}
+  #contList2 .cont.duo{color:#ff8a6a;border-color:#7a3a2a;background:#2a1010}
+  #contList2 .cont.duo:hover{border-color:#ff8a6a;background:#3a1a1a}
   #contList .cont{font-family:"Courier New",monospace;font-size:9px;font-weight:bold;letter-spacing:0;
            padding:3px 5px;border-radius:3px;cursor:pointer;color:#8ad0ff;text-align:left;white-space:nowrap;
            overflow:hidden;text-overflow:ellipsis;background:#10203a;border:1px solid #3a6a9a}
-  #contList .cont:first-child{font-size:10px;padding:5px 6px;border-color:#8ad0ff}
+  #contList .cont:first-of-type,#contList2 .cont:first-of-type{font-size:10px;padding:5px 6px}
   #contList .cont:hover{background:#1a3a5a;border-color:#8ad0ff}
   #startBtn{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;
             font-family:"Impact","Arial Black",sans-serif;letter-spacing:2px;font-size:14px;
@@ -375,7 +425,12 @@
       <div class="sub" id="allySub">nobody with you yet</div>
       <canvas id="company" width="148" height="120"></canvas>
     </div>
-    <div id="keys">arrows / WASD &nbsp;move &amp; aim<br>space&nbsp;fire &nbsp; B&nbsp;potion &nbsp; H&nbsp;heal &nbsp; P&nbsp;pause<br>Enter&nbsp;player two joins on a follower &nbsp; Backspace&nbsp;leaves<br>click a follower here or on the floor to lead them</div>
+    <div id="p2box" class="hidden">
+      <div class="nm" id="p2Name">PLAYER TWO</div>
+      <div class="sub" id="p2Sub">Tab or click: take another follower</div>
+      <canvas id="p2company" width="148" height="46"></canvas>
+    </div>
+    <div id="keys">arrows / WASD &nbsp;move &amp; aim<br>space&nbsp;fire &nbsp; B&nbsp;potion &nbsp; H&nbsp;heal &nbsp; X&nbsp;white &nbsp; P&nbsp;pause<br>Enter&nbsp;player two joins on a follower &nbsp; Backspace&nbsp;leaves<br>click a follower here or on the floor to lead them</div>
   </div>
   <div id="msg"><span id="msgMain"></span><small id="msgSub"></small></div>
 
@@ -390,7 +445,7 @@
 
   <div id="shop" class="hidden">
     <h2>THE TRAVELLING MERCHANT</h2>
-    <div id="shopPurse">purse <b id="shopGold">0</b> gold &nbsp;-&nbsp; every card <b>10</b></div>
+    <div id="shopPurse">purse <b id="shopGold">0</b> gold &nbsp;-&nbsp; every card <b id="shopPrice">10</b></div>
     <div id="shopRow"></div>
     <div id="shopHint">click to buy &nbsp;-&nbsp; ESC to leave</div>
   </div>
@@ -405,7 +460,12 @@
     <div class="tscore"><span id="tlast"></span>High Score <b id="thi">021270</b></div>
     <div class="tprompt">PRESS ANY KEY</div>
     <div class="tsub" id="tcont" style="margin-top:6px;color:#8ad0ff"></div>
-    <div class="tsub" style="margin-top:10px">S &nbsp;sprite sheet &nbsp;-&nbsp; G &nbsp;gamepad setup &nbsp;-&nbsp; gamepad: stick walks, right stick aims, START pauses, X continues a save</div>
+    <div id="titleBtns">
+      <button id="infoBtn" title="every creature, lord, potion and card, and how the dungeon works">INFO</button>
+      <button id="sheetBtn" title="the sprite sheets">SPRITES</button>
+      <button id="padTitleBtn" title="teach the game your gamepad">GAMEPAD</button>
+    </div>
+    <div class="tsub" style="margin-top:8px">I &nbsp;info &nbsp;-&nbsp; S &nbsp;sprite sheet &nbsp;-&nbsp; G &nbsp;gamepad setup &nbsp;-&nbsp; gamepad: stick walks, right stick aims, START pauses, X continues a save</div>
   </div>
 
   <div id="fallen" class="hidden">
@@ -421,11 +481,13 @@
     <div id="pauseList"></div>
     <div id="pauseMenu">
       <div class="pbtn" id="pauseResume">RESUME</div>
+      <div class="pbtn" id="pauseInfo" style="display:none">INFO</div>
       <div class="pbtn quit" id="pauseQuit">QUIT TO TITLE</div>
     </div>
     <div id="pauseHint">ESC or P to resume &nbsp;-&nbsp; Q to quit</div>
   </div>
   <div id="padTag">GAMEPAD: press any button</div>
+  <div id="codex" class="hidden"><div id="codexBody"></div></div>
   <div id="padSetup" class="hidden">
     <h2>GAMEPAD SETUP</h2>
     <div id="padWhich"></div>
@@ -457,8 +519,9 @@
       <button id="twoBtn" title="two heroes on the floor: WASD and the arrow keys, or hand one a gamepad">2 PLAYERS: OFF</button>
       <button id="padBtn" title="who uses the gamepad" style="display:none">PAD: NOBODY</button>
       <button id="padSetupBtn" title="teach the game your gamepad's buttons and sticks">GAMEPAD SETUP</button>
+      <button id="infoBtn2" title="every creature, lord, potion and card, and how the dungeon works">INFO</button>
     </div>
-    <div id="contList"></div>
+    <div id="contWrap"><div id="contList2"></div><div id="contList"></div></div>
   </div>
 </div>
 
@@ -493,7 +556,7 @@ const ZOOM = 2;                            /* fourteen tiles across, cleanly */
 /* movement tuning: base pace scaled to 45%, monsters run at 90% of the elf */
 const SPEED_SCALE = 0.45;
 const PLAYER_SPEED = 1.7 * SPEED_SCALE;
-const ENEMY_PACE   = 0.6;                         // every monster and lord moves at 60% of the old pace
+const ENEMY_PACE   = 0.42;                        // every monster and lord at 42% of the original pace (60%, then another 30% off)
 const ENEMY_SPEED  = PLAYER_SPEED * 0.9 * ENEMY_PACE;
 const ENEMY_ANIM   = Math.round(9/ENEMY_PACE);        // frames per animation step (was 9)
 const ENEMY_STRIDE = Math.round(8/ENEMY_PACE);        // walk ticks per stride frame (was 8)
@@ -1186,6 +1249,7 @@ function humanoidFrame(f,phase,kit,opt){
   const tunD=shade(tun,-34);
   const head=kit.head||'hair', wpn=kit.weapon||'sword';
   const bw = kit.slim ? 0.82 : kit.bulk ? 1.16 : kit.female ? 0.88 : 1;   // slim narrows the torso and shoulders, bulk broadens them
+  const boneCol=kit.bone||C.bone, boneD=shade(boneCol,-45);              // a skeleton's limbs, ribs and pelvis
 
   if(opt.shadow!==false){ const s=P(0,0,0); g.ell(s[0],s[1]+0.5,7,3,SHADOW); }
 
@@ -1193,7 +1257,10 @@ function humanoidFrame(f,phase,kit,opt){
   const leg=(xr,swing)=>{
     const hip=P(xr,0,9+bob), ft=P(xr,swing,0+bob);
     add(kit.chest==='robe' ? -50 : depth(xr,swing*0.5), g2=>{   // under a robe the legs always go behind the hem
-      line(g2,hip[0],hip[1],ft[0],ft[1]-1,3,tro);
+      if(kit.bones){                                   // a bare shin: thin bone, a knob at the knee
+        line(g2,hip[0],hip[1],ft[0],ft[1]-1,2,boneCol);
+        const kn=P(xr,swing*0.5,4.6+bob); g2.ell(kn[0],kn[1],1.4,1.1,boneD);
+      } else line(g2,hip[0],hip[1],ft[0],ft[1]-1,3,tro);
       g2.ell(ft[0],ft[1]-0.5,2.6,1.6,boot);           // the boot, foreshortened
       if(swing>1) g2.ell(ft[0]+d[0]*1.5,ft[1]+d[1]*0.75-0.5,1.8,1.2,shade(boot,20));   // toe cap forward
     });
@@ -1223,12 +1290,27 @@ function humanoidFrame(f,phase,kit,opt){
     });
   }
 
+  if(kit.bones){                                       // the ribcage over the rags, a spine down the back, a pelvis at the hip
+    add(0.02, g2=>{
+      for(const z of [11.2,12.8,14.4]){
+        for(let k=-3.4;k<=3.4;k+=0.6){
+          const yf=2.6*Math.sqrt(Math.max(0,1-(k/3.9)*(k/3.9)));     // the front curve of the torso
+          const q=P(k*bw,yf,z+bob);
+          if(depth(k*bw,yf)>0.2) g2.px(q[0],q[1],boneCol);
+        }
+      }
+      const st=P(0,1.6,15.6+bob); g2.ell(st[0],st[1],1,2.2,boneD);   // sternum
+      for(let z=10;z<=16;z+=1.2){ const q=P(0,-3.1,z+bob); if(depth(0,-3.1)>0.2) g2.px(q[0],q[1],boneD); }   // the spine, seen from behind
+      const pv=P(0,0.6,9.4+bob); g2.ell(pv[0],pv[1],3.6*bw,1.4,boneD); g2.ell(pv[0],pv[1]-0.5,2.6*bw,0.9,boneCol);   // the pelvis
+    });
+  }
   /* ---- arms: from the shoulder, hanging to hip height, swinging; the right hand holds the weapon */
   const arm=(xr,swing,right)=>{
     if(kit.wraith){ swing=5.5+swing*0.4; }               // both hands out in front, grasping
     const sh=P(xr,0,15.5+bob), hd=P(xr+0.6*Math.sign(xr),swing,kit.wraith?12+bob:8.5+bob);
     add(depth(xr,swing*0.6), g2=>{
-      line(g2,sh[0],sh[1],hd[0],hd[1],3,tun);                       // sleeve
+      if(kit.bones){ line(g2,sh[0],sh[1],hd[0],hd[1],2,boneCol); const el=P(xr+0.3*Math.sign(xr),swing*0.5,12+bob); g2.ell(el[0],el[1],1.3,1,boneD); }   // bare arm bone, an elbow
+      else line(g2,sh[0],sh[1],hd[0],hd[1],3,tun);                  // sleeve
       const handC=kit.hands||skin;
       if(kit.wraith){                                                 // seeking hands: broad, fingers spread toward you
         g2.ell(hd[0],hd[1],2.5,2,handC);
@@ -1341,6 +1423,14 @@ function humanoidFrame(f,phase,kit,opt){
         g2.px(rim[0]+Math.cos(a)*RX*0.92, rim[1]+Math.sin(a)*RY*0.92*0.55+0.6, Math.cos(a)>0.6?shade(gold,-40):gold); }
     }
     if(head==='skullhood'){ const j=P(0,3.5,19+bob); g2.rect(j[0]-2,j[1],4,1,shade(C.bone,-50)); }   // a tooth line
+    if(head==='skull' && depth(0,4.5)>-0.3){                            // the face of the skull, wherever it faces us
+      const bc=kit.bone||C.bone, bd=shade(bc,-55), bk='#1a0a0a';
+      const nz=P(0,4.6,20.2+bob); g2.px(nz[0],nz[1],bk); g2.px(nz[0],nz[1]+1,bk);                       // the nasal hollow
+      for(let k=-2;k<=2;k++){ const t=P(k*0.95,4.2,18.2+bob); g2.px(t[0],t[1],(k%2)?bd:bc); }           // a row of teeth
+      const jw=P(0,4.0,17.4+bob); for(let k=-2;k<=2;k++) g2.px(jw[0]+k,jw[1],bd);                       // the jaw's edge
+      for(const sg of [-1,1]){ const tp=P(sg*4.2,1.2,21.5+bob); if(depth(sg*4.2,1.2)>0.6) g2.px(tp[0],tp[1],bd); }   // sunken temples
+      const cr=P(0,0,26+bob); g2.px(cr[0],cr[1],shade(bc,30));                                          // the dome catches the light
+    }
     /* Eyes, per the reference sheet: two dark, muted dots on a ring round the
        skull, 35 degrees either side of the facing. True body-space points, so
        they slide round the head as the figure turns, the near one a pixel lower
@@ -1359,6 +1449,11 @@ function humanoidFrame(f,phase,kit,opt){
         const rows = kit.bigEyes ? [0,1] : [0];                     // big eyes are two rows deep
         for(const rr of rows){ if(onHead(ex0,ey0+rr)) g2.px(ex0,ey0+rr,glow); if(onHead(ex0+s,ey0+rr)) g2.px(ex0+s,ey0+rr,glow); }
         if(vis>=1.2){ g2.px(ex0,ey0-1,C.blk); g2.px(ex0+s,ey0-2,C.blk); g2.px(ex0+s,ey0-1,C.blk); }   // the brow slants down toward the nose
+        continue;
+      }
+      if(head==='skull' && onHead(ex0,ey0)){                         // a hollow socket, two pixels deep, black at the heart
+        const sock=vis>=1.2?'#100404':'#2a1010';
+        g2.px(ex0,ey0,sock); g2.px(ex0,ey0-1,sock); if(onHead(ex0+s,ey0)) g2.px(ex0+s,ey0,sock); if(onHead(ex0+s,ey0-1)) g2.px(ex0+s,ey0-1,shade(sock,20));
         continue;
       }
       if(onHead(ex0,ey0)){ g2.px(ex0,ey0, vis>=1.2?eyeCol:eyeFar); if(bony&&vis>=1.2) g2.px(ex0,ey0-1,eyeFar); }
@@ -1676,7 +1771,7 @@ const HUMKIT={
   sorcerer: {skin:'#e8b07a', hair:'#1a1a1a', tunic:'#b03098', trousers:'#5a0e4a', boots:'#3a2a12', steel:'#d8d8e8', head:'hood', cloth:'#8a2078', weapon:'staff', gem:'#ff90e0', chest:'robe'},
   battlemage:{skin:'#e8b07a', hair:'#3a2a1a', tunic:'#7a2a2a', trousers:'#3a1010', boots:'#2a2a3a', steel:'#8a7a9a', head:'helm', weapon:'staff', gem:'#c98cff', chest:'plate'},
   cleric:   {skin:'#e8b07a', hair:'#5a2e12', tunic:'#e8e0d0', trousers:'#b0a898', boots:'#4a2a12', steel:'#ffd23c', head:'circlet', gold:'#ffd23c', weapon:'mace', offhand:'book', book:'#6e0f06', chest:'robe'},
-  skel:     {skin:'#e8e0d0', hair:'#4a4a40', tunic:'#9a9a8a', trousers:'#4a4a40', boots:'#3a3a30', steel:'#d8d8e8', head:'skull', weapon:'bow', cape:'#3a3a30'},
+  skel:     {skin:'#e8e0d0', hair:'#4a4a40', tunic:'#5a5a50', trousers:'#4a4a40', boots:'#3a3a30', steel:'#d8d8e8', head:'skull', weapon:'bow', cape:'#3a3a30', bones:true},
   wight:    {skin:'#8aa8d8', hair:'#16203a', tunic:'#3a4a6a', trousers:'#16203a', boots:'#16203a', steel:'#d8d8e8', head:'hood', cloth:'#2a3a5a', weapon:'dagger', chest:'cape', cape:'#16203a'},
   demon:    {skin:'#c83828', hair:'#4a0804', tunic:'#a01810', trousers:'#4a0804', boots:'#4a0804', steel:'#d8d8e8', head:'horns', weapon:'axe', cape:'#3a0a0a'},
   cursed:   {skin:'#7a8a70', hair:'#1e2a1e', tunic:'#4a5a4a', trousers:'#1e2a1e', boots:'#2a2a3a', steel:'#6a7a6a', head:'fullhelm', weapon:'sword', cape:'#1e2a1e'},
@@ -1686,6 +1781,31 @@ const HERO={};                        // id -> roster entry
 const HSPR={};                        // hero sprites live in their own map: some
 ROSTER.forEach(h=>{ HERO[h.id]=h;     // roster ids (demon) clash with monster ones
   HSPR[h.id]= h.beast?makeQuadruped(h.id,h.kit) : HUMKIT[h.id]?makeHumanoid(HUMKIT[h.id]) : makeHero(h.kit); });
+/* The Blood Warrior: a champion above the roster, never on the pick screen.
+   The rare crimson card brings one into the company; from there the player can
+   take the lead as with any follower. Stronger than every warrior in the grid. */
+HERO.bloodwarrior={id:'bloodwarrior', name:'Blood Warrior', group:'melee', hp:2000, spd:1.12, rate:12, pow:7, rng:30};
+const BLOOD_KIT={skin:'#d8c0a0', hair:'#2a0a0a', tunic:'#8c0a14', trousers:'#3a0608', boots:'#1a0404', steel:'#e0d0d8',
+                 head:'horns', weapon:'axe', chest:'cape', cape:'#4a0008', bulk:true, eyes:'#ff2a2a', bigEyes:true};
+HSPR.bloodwarrior=makeHumanoid(BLOOD_KIT);
+/* The Blood Wight: the Wight raised to the same tier - a crimson-hooded undead
+   with a pale drowned face, red eyes, and daggers that fly like the Wight's
+   but hit far harder and further. Its own rare card, only past floor 20. */
+HERO.bloodwight={id:'bloodwight', name:'Blood Wight', group:'undead', hp:1500, spd:1.30, rate:8, pow:6, rng:130};
+const BLOODWIGHT_KIT={skin:'#c8b8c8', hair:'#2a0a10', tunic:'#6a0010', trousers:'#2a0408', boots:'#1a0204', steel:'#e0d0d8',
+                      head:'hood', cloth:'#3a0008', weapon:'dagger', chest:'cape', cape:'#1c0206', slim:true, eyes:'#ff2a2a', bigEyes:true};
+HSPR.bloodwight=makeHumanoid(BLOODWIGHT_KIT);
+/* The Blood Mage: the third of the crimson three. Robed in blood and black,
+   a staff crowned with a violet gem, and it throws purple flame that burns
+   far and hard. Its own rare card, only past floor 20. */
+HERO.bloodmage={id:'bloodmage', name:'Blood Mage', group:'magic', hp:1300, spd:1.15, rate:7, pow:7, rng:150};
+const BLOODMAGE_KIT={skin:'#e0c8b0', hair:'#1a0408', tunic:'#7a0a20', trousers:'#2a0410', boots:'#1a0208', steel:'#d0c0d8',
+                     head:'hood', cloth:'#4a0418', weapon:'staff', gem:'#c060ff', chest:'robe', slim:true, eyes:'#e070ff', bigEyes:true};
+HSPR.bloodmage=makeHumanoid(BLOODMAGE_KIT);
+/* The Blood Goat: the Battle Goat raised to the crimson tier - a red-hided,
+   red-eyed ram that runs faster than anything and barges at full weight. */
+HERO.bloodgoat={id:'bloodgoat', name:'Blood Goat', group:'beast', hp:1800, spd:1.45, rate:9, pow:8, rng:26, beast:true};
+HSPR.bloodgoat=makeQuadruped('bloodgoat',{main:'#8c0a14',light:'#ff6a44',dark:'#3a0608',feature:'goat',eye:'#ff2a2a'});
 function groupOf(id){ return GROUPS.find(g=>g.id===HERO[id].group); }
 /* Monsters on the same skeleton as the heroes: eight facings, four-frame walk.
    Ghosts keep their floating sheet and the lords keep their bakes. */
@@ -1697,11 +1817,11 @@ const ENEMY_KITS={
   ghost:   {skin:'#12121c', hands:'#e8ecf4', hair:'#12121c', tunic:'#d8dce8', trousers:'#d8dce8', boots:'#d8dce8', steel:'#d8dce8', head:'hood', cloth:'#c8ccd8', weapon:'none', wraith:true, chest:'robe', eyes:'#ff2a2a'},
   sorcerer:  {skin:'#6a5a7a', hair:'#1a1a2a', tunic:'#2a1a3a', trousers:'#1a1020', boots:'#1a1020', steel:'#8a8a9a', head:'hood', cloth:'#1e1230', weapon:'staff', gem:'#c060ff', chest:'robe', slim:true, eyes:'#e070ff'},
   troll:     {skin:'#6a8a5a', hair:'#2a3a20', tunic:'#4a3a2a', trousers:'#2a2018', boots:'#1a1410', steel:'#8a8a9a', head:'hair', weapon:'mace', bulk:true, eyes:'#ffd040'},
-  redskel:   {skin:'#c02020', bone:'#d03030', hair:'#4a0a0a', tunic:'#5a1010', trousers:'#3a0a0a', boots:'#2a0808', steel:'#d8d8e8', head:'skull', weapon:'axe', slim:true, eyes:'#ffe040'},
+  redskel:   {skin:'#c02020', bone:'#d03030', hair:'#4a0a0a', tunic:'#5a1010', trousers:'#3a0a0a', boots:'#2a0808', steel:'#d8d8e8', head:'skull', weapon:'axe', slim:true, eyes:'#ffe040', bones:true},
   blackghost:{skin:'#0a0a10', hands:'#8a8a9a', hair:'#0a0a10', tunic:'#2a2a34', trousers:'#2a2a34', boots:'#2a2a34', steel:'#8a8a9a', head:'hood', cloth:'#1a1a24', weapon:'none', wraith:true, chest:'robe', eyes:'#8cf07a'},
   firedemon: {skin:'#ff6a20', hair:'#7a2000', tunic:'#a03010', trousers:'#5a1808', boots:'#3a0a04', steel:'#8a8a9a', head:'horns', weapon:'none', bulk:true, eyes:'#ffff60', bigEyes:true},
-  blackskel: {skin:'#2a2a34', bone:'#34343e', hair:'#101018', tunic:'#1a1a24', trousers:'#101018', boots:'#101018', steel:'#8a8a9a', head:'skull', weapon:'staff', gem:'#ff8a20', slim:true, eyes:'#ff8a20'},
-  skeleton:{skin:'#e8e0d0', hair:'#4a4a40', tunic:'#5a5a50', trousers:'#3a3a30', boots:'#2a2a20', steel:'#d8d8e8', head:'skull', weapon:'dagger', slim:true, eyes:'#ff2a2a'}
+  blackskel: {skin:'#2a2a34', bone:'#34343e', hair:'#101018', tunic:'#1a1a24', trousers:'#101018', boots:'#101018', steel:'#8a8a9a', head:'skull', weapon:'staff', gem:'#ff8a20', slim:true, eyes:'#ff8a20', bones:true},
+  skeleton:{skin:'#e8e0d0', hair:'#4a4a40', tunic:'#5a5a50', trousers:'#3a3a30', boots:'#2a2a20', steel:'#d8d8e8', head:'skull', weapon:'dagger', slim:true, eyes:'#ff2a2a', bones:true}
 };
 const MSPR={}; Object.keys(ENEMY_KITS).forEach(k=>{ MSPR[k]=makeHumanoid(ENEMY_KITS[k]); });
 MSPR.spider=makeQuadruped('spider',{main:'#2a2a30',light:'#4a4a55',dark:'#101014',feature:'spider',eye:'#ff2020'});
@@ -1715,14 +1835,15 @@ const SLIME_TIERS={
 };
 function slime(T,f){
   return SA(g=>{
-    const rx=f?10.5:9, ry=f?5.5:7, cy=f?19:18;
+    const rx=f?10.5:9, ry=f?5.5:7, cy=f?21:20;      // sits on the floor line, where the feet of the others are
     g.ell(14,cy+1,rx,ry,T.dark);                                  // the wet underside
-    g.ell(14,cy-0.5,rx-0.5,ry-0.5,T.base);
+    g.ell(15,cy+0.5,rx-0.8,ry-0.8,T.light);                        // rim light along the lower right
+    g.ell(13.6,cy-0.4,rx-1.3,ry-1.3,T.base);                       // the body, leaving that rim showing
     g.ell(12,cy-2.5,rx*0.55,ry*0.5,T.light);                       // the sheen across the top
-    g.ell(11,cy-3.5,2.5,1.4,C.wht);                                // a hard highlight: glossy
-    g.px(17+(f?1:0),cy-4,C.wht);
-    g.px(11,cy,C.blk).px(17,cy,C.blk); g.px(11,cy-1,T.light).px(17,cy-1,T.light);   // eyes, catching light
-    g.px(14,cy+2,T.dark);                                          // a mouth, sort of
+    g.ell(11,cy-3.5,3,1.8,C.wht);                                  // a hard highlight: glossy
+    g.px(16+(f?1:0),cy-4,C.wht).px(8,cy-1,C.wht);                   // and two smaller glints
+    g.px(16,cy+1,T.dark).px(9,cy+2,T.dark).px(12,cy+3,T.dark);   // bubbles caught in the jelly, nothing more
+    g.px(17,cy-1,T.light);
     g.emboss(14).outline();
   });
 }
@@ -2063,6 +2184,26 @@ for(let t=0;t<GEN_TIERS;t++){
   SPR.genSkull.push([0,1,2,3].map(f=>genSkull(t,f)));
   SPR.genBones.push([0,1,2,3].map(f=>genBones(t,f)));
 }
+function genPool(T,tier,f){
+  return SA(g=>{
+    const rx=[11,9,7][tier], ry=[5,4.2,3.4][tier], cy=20;
+    g.ell(14,cy+1,rx+1,ry+1,'#2a2a3e');                              // the wet stone round it
+    g.ell(14,cy,rx,ry,T.dark);
+    g.ell(13.5,cy-0.5,rx-1.2,ry-1.2,T.base);
+    g.ell(12,cy-2,rx*0.45,ry*0.45,T.light);                          // sheen
+    const bub=[[9,cy-1],[17,cy+1],[13,cy+2],[19,cy-2]];             // bubbles rise and burst in turn
+    bub.forEach((b,i)=>{ const ph=(i+f)%4; if(ph<2){ g.ell(b[0],b[1]-ph,1.6,1.4,ph?T.light:T.base); g.px(b[0]-1,b[1]-ph-1,C.wht); } else if(ph===2) g.px(b[0],b[1]-2,T.light); });
+    if(tier>=1){ g.px(4,cy+3,'#2a2a3e').px(24,cy-3,'#2a2a3e'); }      // drying at the edges
+    if(tier>=2){ g.rect(6,cy+1,3,1,'#2a2a3e'); g.rect(20,cy-1,3,1,'#2a2a3e'); }
+    g.emboss(14).outline();
+  });
+}
+SPR.genPool={};
+function poolSprites(){
+  const k=slimeTopTier();
+  if(!SPR.genPool[k]) SPR.genPool[k]=[0,1,2].map(t=>[0,1,2,3].map(f=>genPool(SLIME_TIERS[k],t,f)));
+  return SPR.genPool[k];
+}
 SPR.gen=SPR.genSkull[0];                                                // older callers
 function genTier(g){ const m=g.maxHp||g.hp||1; return g.hp>m*0.66 ? 0 : g.hp>m*0.33 ? 1 : 2; }
 /* the merchant: a hooded trader behind a heap of goods */
@@ -2203,6 +2344,22 @@ SPR.potion=S(g=>{
   g.rect(6,14,8,3,C.bluD);
   g.ell(8,11,2.4,2,C.bluL);
   g.emboss(30).outline();
+});
+/* the white potion: every generator on the floor, gone */
+SPR.white=S(g=>{
+  g.rect(8,2,4,3,C.gry); g.rect(8,2,4,1,C.wht);
+  g.rect(7,5,6,3,'#e8e8f4');
+  g.ell(10,12,5.5,5,'#f4f4ff');
+  g.rect(6,14,8,3,'#c8c8d8');
+  g.ell(8,11,2.4,2,C.wht);
+  g.px(12,9,'#9ad8ff').px(11,13,'#9ad8ff');
+  g.emboss(30).outline();
+});
+SPR.cache=S(g=>{
+  g.ell(10,16,9,3,'#5a1a10'); g.ell(10,15.5,8,2.4,'#8c2a18');            // a red cloth
+  const bottle=(x,y,c,cl)=>{ g.rect(x+1,y,2,2,C.gry); g.rect(x,y+2,4,2,cl); g.ell(x+2,y+6,2.6,3,c); g.px(x+1,y+5,cl); };
+  bottle(2,4,C.blu,C.bluL); bottle(8,2,C.blu,C.bluL); bottle(14,4,'#ff5a6a','#ffb0b8');
+  g.emboss(28).outline();
 });
 SPR.key=S(g=>{
   g.ell(6,7,4,4,C.yel); g.ell(6,7,1.8,1.8,C.brnD);
@@ -2956,7 +3113,7 @@ function drawPolish(){
   g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(0.5,'rgba(255,255,255,0.09)'); g.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=g; ctx.fillRect(camX,camY,CAM_W,CAM_H);
 }
-let lightCv=null, mistCv=null, darkFadeT=0;
+let lightCv=null, mistCv=null, darkFadeT=0, whiteFlashT=0;
 const DARK_FADE=50;
 function drawDarkness(){
   const D=theme.deco||{};
@@ -3064,6 +3221,7 @@ function newLevel(keepStats){
      through an escape wall used to paint the whole new floor as archways that
      no longer led anywhere. */
   idleT=0; escapeAll=false; crack=null; darkFadeT=0; exitTrail=[]; exitTrailFrame=-999;
+  if(up&&up.cata>0) cataT=cataInterval();
   setTheme(level); genMap(); prerender();
   const tiles=freeTiles();
   enemies=[]; gens=[]; items=[]; shots=[]; particles=[]; eshots=[]; grenades=[]; deaths=[];
@@ -3099,7 +3257,8 @@ function newLevel(keepStats){
   player.keys=0;                                 // gold keys are floor-bound
   player.gold=player.gold|0;                     // coin travels with you
   player.keysSilver=player.keysSilver|0; player.keysRed=player.keysRed|0;
-  if(!keepStats) hotbar=new Array(HOT_SLOTS).fill(null);   // a fresh run, a fresh belt
+  if(!keepStats) hotbar=new Array(hotSlots()).fill(null);  // a fresh run, a fresh belt
+  while(hotbar.length<hotSlots()) hotbar.push(null);
   if(!keepStats) addToHotbar('potion');                    // everyone starts with one
   for(let i=0;i<up.extraPotions;i++) addToHotbar('potion');
   hotDirty=true;
@@ -3135,8 +3294,14 @@ function newLevel(keepStats){
   /* The company grows by one every second floor, so the garrison grows with it:
      more monsters, more generators, and a nastier mix the deeper you go. */
   const A=areaScale();                            // a small floor holds less, a vast one more
-  const ngen=Math.max(2,Math.round((5+Math.min(16,Math.floor(level/2.2)))*A));
-  const nfoe=Math.min(400, Math.round(Math.min(340, 44+Math.round(level*7.5))*A));
+  /* Hush: while it lasts, each new floor may come up empty of monsters */
+  let quiet=false;
+  if(up.quiet>0){
+    quiet = rnd() < up.quiet/10;
+    if(--up.quietLeft<=0){ up.quiet=0; up.quietLeft=0; delete up.taken.quiet; hushFaded=true; }
+  }
+  const ngen=quiet?0:Math.max(2,Math.round((5+Math.min(16,Math.floor(level/2.2)))*A));
+  const nfoe=quiet?0:Math.min(400, Math.round(Math.min(340, 44+Math.round(level*7.5))*A));
   const ntre=Math.round((10+ri(6))*A);
   const demonShare=Math.min(0.45, level*0.012);      // near half of them by floor 40
   for(let i=0;i<ngen;i++){ const t=take(5);
@@ -3146,7 +3311,23 @@ function newLevel(keepStats){
                kind:i%3===2?'ghost':'grunt'}); }
   for(let i=0;i<nfoe;i++){ const t=take(2);
     spawn(t[0],t[1], pickMonster(i,demonShare)); }
-  if(deathWalks(level)){ const t=take(14); spawnDeath(t[0],t[1]); }       // far from the door, and coming
+  if(deathWalks(level)&&!quiet){ const t=take(14); spawnDeath(t[0],t[1]); }   // far from the door, and coming
+  /* Slime nests: a bubbling pool with its brood around it, set apart from the
+     rest of the garrison. They creep after you like everything else, so given
+     time they mix into the crowd. */
+  if(level>=2 && !quiet){
+    const nests=1+Math.min(2,(level/15)|0)+(A>1.5?1:0);
+    for(let n=0;n<nests;n++){
+      const t=take(9);
+      gens.push({tx:t[0],ty:t[1],x:t[0]*TILE+10,y:t[1]*TILE+10,
+                 hp:8+level*2, maxHp:8+level*2, cd:Math.max(60,170-level)+ri(90), kind:'slime'});
+      const spots=[];
+      for(let y=t[1]-2;y<=t[1]+2;y++) for(let x=t[0]-2;x<=t[0]+2;x++)
+        if(!isWall(x,y) && !(x===t[0]&&y===t[1])) spots.push([x,y]);
+      const brood=Math.round((4+ri(4))*Math.min(1.5,A));
+      for(let i=0;i<brood&&spots.length;i++){ const sp=spots.splice(ri(spots.length),1)[0]; spawn(sp[0],sp[1],'slime'); }
+    }
+  }
   for(let i=0;i<ntre;i++){ const t=take(2); items.push({t:'treasure',tx:t[0],ty:t[1]}); }
   const nfood=4+ri(3)+up.extraFood;              // roll the count once, not per pass
   for(let i=0;i<nfood;i++){ const t=take(3); items.push({t:'food',tx:t[0],ty:t[1]}); }
@@ -3155,6 +3336,8 @@ function newLevel(keepStats){
   if(level%2===0){ const t=take(6); items.push({t:'elixir',tx:t[0],ty:t[1]}); }
   /* the golden draught heals the whole company: most floors in every three */
   if(level%3===1 || (level%3===2 && rnd()<0.5)){ const t=take(6); items.push({t:'heal',tx:t[0],ty:t[1]}); }
+  /* the white potion, rarer still: every fifth floor from the fourth, hidden deep */
+  if(level%5===4){ const t=take(9); items.push({t:'white',tx:t[0],ty:t[1]}); }
   /* a supercharge every third floor, hidden well away from the entrance */
   if(level%3===0){ const t=take(8); items.push({t:'super',tx:t[0],ty:t[1]}); }
   /* the purple tonic mends a follower, so it turns up on the floors between */
@@ -3233,13 +3416,18 @@ function newLevel(keepStats){
      somewhere to accumulate until a red door finally appears. */
   let wantRed = (level%4===0) ? 1 : 0;
   let wantSilver = 1;
+  /* red potion caches: a red door on a dead end with a clutch of potions behind
+     it - a reason to spend a red key on the floors between strongrooms */
+  let wantCache = (level>=3 && (level%2===1 || rnd()<0.3)) ? 1 : 0;
+  if(level>=12 && rnd()<0.4) wantCache++;
   for(const q of vaults){
-    if(!wantRed && !wantSilver) break;
+    if(!wantRed && !wantSilver && !wantCache) break;
     if(used.some(u=>u.tx===q.cell[0]&&u.ty===q.cell[1])) continue;
-    const red = wantRed>0;
-    items.push({t:'door', lock:red?'red':'silver', tx:q.gate[0], ty:q.gate[1]});
+    const red = wantRed>0, silver = !red && wantSilver>0;
+    items.push({t:'door', lock:silver?'silver':'red', tx:q.gate[0], ty:q.gate[1]});
     if(red){ items.push({t:REWARDS[ri(REWARDS.length)], tx:q.cell[0], ty:q.cell[1]}); wantRed--; }
-    else   { items.push({t:'keyRed', tx:q.cell[0], ty:q.cell[1]}); wantSilver--; }
+    else if(silver){ items.push({t:'keyRed', tx:q.cell[0], ty:q.cell[1]}); wantSilver--; }
+    else { items.push({t:'cache', tx:q.cell[0], ty:q.cell[1]}); wantCache--; }
     used.push({tx:q.cell[0],ty:q.cell[1]}); used.push({tx:q.gate[0],ty:q.gate[1]});
   }
 
@@ -3247,6 +3435,8 @@ function newLevel(keepStats){
      On floors divisible by ten you get both, which is meant to hurt. */
   allies=[]; prisoner=null; boss=null; trail=[];
   let sub='find the exit';
+  const quietNote = quiet ? 'HUSH - not a monster stirs - ' : '';
+  if(hushFaded){ hushFaded=false; setTimeout(()=>{ if(mode==='play') showMsg('THE HUSH HAS PASSED','the card may turn up again'); },2600); }
   if(level%2===0){
     /* captive champion, sealed in the deepest dead end behind a gold door */
     const pool=ROSTER.filter(h=>h.id!==chosenId);
@@ -3355,7 +3545,7 @@ function newLevel(keepStats){
 
 
   document.getElementById('lvlname').textContent='Level '+level+' - '+theme.name;
-  showMsg('LEVEL '+level+' - '+theme.name.toUpperCase(),sub);
+  showMsg('LEVEL '+level+' - '+theme.name.toUpperCase(),quietNote+sub);
 }
 const ORD=['Zero','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten',
            'Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen','Twenty'];
@@ -3380,7 +3570,15 @@ function depthSpeed(lv){
   return Math.min(1.30, 1+0.011*(L-1));       // capped: quick, never uncatchable
 }
 function depthScale(){ return depthDmg(); }   // kept: older callers mean damage
+/* which colour of slime this floor breeds: the newest colour twice as often */
+function slimeKindFor(){
+  const tiers=Object.keys(SLIME_TIERS).filter(k=>level>=SLIME_TIERS[k].from);
+  if(!tiers.length) return null;
+  const t=tiers.length-1; return tiers[Math.min(t, ri(t+2))];
+}
+function slimeTopTier(){ const tiers=Object.keys(SLIME_TIERS).filter(k=>level>=SLIME_TIERS[k].from); return tiers[tiers.length-1]||'slimeG'; }
 function spawn(tx,ty,kind){
+  if(kind==='slime'){ kind=slimeKindFor()||'grunt'; }
   const st={grunt:{hp:2+((level/2)|0),sp:ENEMY_SPEED,dmg:16,pts:20},
             demon:{hp:6+Math.round(level*1.6),sp:ENEMY_SPEED,dmg:34,pts:60},
             goblin:{hp:2+((level/3)|0),sp:ENEMY_SPEED*1.15,dmg:12,pts:25},     // quick, spear
@@ -3416,6 +3614,7 @@ function spawn(tx,ty,kind){
    eight, zombies from twelve, and each takes a growing slice of the garrison. */
 /* Each band monster rules its ten floors - close to half of every spawn - and
    afterwards turns up now and then for variety. Goblins keep their old start too. */
+const DETECT=180, DETECT_FAR=320, HEAR=96, AWARE_T=240;   // sight in pixels (hearing needs no line of sight), memory in frames
 const BANDS=[['goblin',10],['sorcerer',20],['troll',30],['redskel',40],['blackghost',50],['spider',60],['firedemon',70],['blackskel',80]];
 function pickMonster(i,demonShare){
   const cur=BANDS.find(b=>level>=b[1]&&level<b[1]+10);
@@ -3429,11 +3628,6 @@ function pickMonster(i,demonShare){
   if(level>=4 && r0<0.12) return 'snake';
   if(level>=5 && r0<0.19) return 'lobber';
   if(level>=7 && r0<0.25) return 'skull';
-  if(level>=2 && r0<0.37){
-    const tiers=Object.keys(SLIME_TIERS).filter(k=>level>=SLIME_TIERS[k].from);
-    const t=tiers.length-1;                                     // the newest colour twice as often
-    return tiers[Math.min(t, ri(t+2))];
-  }
   const r=rnd();
   if(level>=12 && r<0.14) return 'zombie';
   if(level>=8  && r<0.30) return 'skeleton';
@@ -3446,7 +3640,13 @@ function pickMonster(i,demonShare){
    frame - hundreds of items times hundreds of monsters, which is what made
    the vast floors crawl. The doors now live in a set, rebuilt once a frame. */
 let doorSet=new Set();
-function indexDoors(){ doorSet=new Set(); for(const it of items) if(it.t==='door') doorSet.add(it.tx*4096+it.ty); }
+/* Generators are solid too, as on the cabinet: nothing walks over one. What
+   it breeds spills out of whichever sides are open and queues from there. */
+function indexDoors(){
+  doorSet=new Set();
+  for(const it of items) if(it.t==='door') doorSet.add(it.tx*4096+it.ty);
+  for(const g of gens) if(g.hp>0) doorSet.add(g.tx*4096+g.ty);
+}
 function blocked(x,y,r){
   const pts=[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r],[x,y-r],[x,y+r],[x-r,y],[x+r,y]];
   for(const p of pts){
@@ -3538,7 +3738,7 @@ const keys={};
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   keys[k]=true;
-  if([' ','arrowup','arrowdown','arrowleft','arrowright','backspace'].indexOf(k)>=0) e.preventDefault();
+  if([' ','arrowup','arrowdown','arrowleft','arrowright','backspace','tab'].indexOf(k)>=0) e.preventDefault();
   handleKey(k);
 });
 /* one door for every press, whether it came from the keyboard or a gamepad */
@@ -3551,7 +3751,16 @@ function handleKey(k){
   }
   if(mode==='gate'){ passGate(); return; }        // any key opens the floor
   if(mode==='sheet'){ if(k==='escape') closeSheet(); else if(k==='s') openSheet(); return; }
+  if(mode==='codex'){ if(k==='escape'||k==='i') closeCodex(); return; }
+  if(mode==='p2join'){
+    const mv={arrowleft:[-1,0],arrowright:[1,0],arrowup:[0,-1],arrowdown:[0,1],a:[-1,0],d:[1,0],w:[0,-1],s:[0,1]}[k];
+    if(mv) moveCursor(2,mv[0],mv[1]);
+    else if(k==='enter'||k===' ') p2JoinConfirm();
+    else if(k==='escape'||k==='backspace') p2JoinCancel();
+    return;
+  }
   if(mode==='title'){ if(k==='s') openSheet();                       // any other key starts the game
+                      else if(k==='i') openCodex();
                       else if(k==='g'){ titleEl.className='hidden'; openPadSetup(); if(mode!=='padsetup') titleEl.className=''; }
                       else if(k==='c' && loadRec()) continueRun(0);
                       else if(!['shift','control','alt','meta','capslock','tab'].includes(k)) leaveTitle();
@@ -3578,11 +3787,11 @@ function handleKey(k){
     return;
   }
   if(mode==='select'){
-    if(k==='arrowleft'||k==='a') moveSelect(-1,0);
-    if(k==='arrowright'||k==='d') moveSelect(1,0);
-    if(k==='arrowup'||k==='w') moveSelect(0,-1);
-    if(k==='arrowdown'||k==='s') moveSelect(0,1);
-    if(k==='enter'||k===' ') startGame();
+    const p1k={a:[-1,0],d:[1,0],w:[0,-1],s:[0,1]}, p2k={arrowleft:[-1,0],arrowright:[1,0],arrowup:[0,-1],arrowdown:[0,1]};
+    if(p1k[k]) moveCursor(1,p1k[k][0],p1k[k][1]);
+    if(p2k[k]) moveCursor(twoP?2:1,p2k[k][0],p2k[k][1]);
+    if(k===' ') confirmPick(1);
+    if(k==='enter') confirmPick(twoP?2:1);
     if(k==='c' && loadRec()) continueRun(0);
     if(k==='g'){ openPadSetup(); }
     if(k==='b') startWithEveryone();          // b for bring everyone
@@ -3596,10 +3805,13 @@ function handleKey(k){
   if(k==='p'||k==='escape') togglePause();
   if(k==='enter' && !(twoP&&p2Ally())) dropIn();
   if(k==='backspace' && twoP) dropOut();
+  if(k==='tab' && twoP) p2Cycle(1);
   if(k==='b'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='potion'); if(i>=0) useSlot(i); }
   if(k==='h'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='elixir'); if(i>=0) useSlot(i); }
   if(k==='g'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='heal'); if(i>=0) useSlot(i); }
-  if(k>='1'&&k<='6') useSlot(+k-1);
+  if(k==='x'){ const i=hotbar.findIndex(sl=>sl&&sl.t==='white'); if(i>=0) useSlot(i); }
+  if(k>='1'&&k<='9') useSlot(+k-1);
+  if(k==='0') useSlot(9);
 }
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -3617,7 +3829,8 @@ let twoP=false, p1src='wasd', p2src='arrows', pickStage=1, chosen1=null;
 const pad2={x:0,y:0,fire:false,aim:null,on:false};
 function p2Ally(){ return allies.find(a=>a.p2)||null; }
 function inputFor(n){
-  const src = twoP ? (n===1?p1src:p2src) : 'all';
+  let src = twoP ? (n===1?p1src:p2src) : 'all';
+  if(n===1 && twoP && !p2Ally() && src==='wasd') src='all';   // nobody on the arrows: they drive player one meanwhile
   let dx=0,dy=0,fire=false,aim=null;
   const kb=(l,r,u,d,f)=>{ if(keys[l]) dx=-1; if(keys[r]) dx=1; if(keys[u]) dy=-1; if(keys[d]) dy=1; if(f.some(k=>keys[k])) fire=true; };
   if(src==='all'||src==='wasd') kb('a','d','w','s',[' ']);
@@ -3632,11 +3845,12 @@ function keepInView(e){                            // the tether: nobody walks o
   e.x=Math.max(camX+m,Math.min(camX+CAM_W-m,e.x));
   e.y=Math.max(camY+m,Math.min(camY+CAM_H-m,e.y));
 }
+let dropInNagAt=-999;
 function dropIn(){
   if(mode!=='play'||dead) return false;
   if(p2Ally()){ return false; }
   const cands=allies.filter(a=>!a.down);
-  if(!cands.length){ showMsg('NO FOLLOWER FOR PLAYER TWO','free someone from a cage first'); return false; }
+  if(!cands.length){ return openP2Join(); }        // nobody free: pick a champion from the roster instead
   let best=null,bd=1e9; for(const a of cands){ const d=dist(a,player); if(d<bd){ bd=d; best=a; } }
   best.p2=true; if(best.member) best.member.p2=true;
   twoP=true; if(!pad.on && p1src==='pad') p1src='wasd';
@@ -3644,6 +3858,27 @@ function dropIn(){
   beep(660,0.08,'square',0.05); beep(990,0.12,'square',0.05);
   return true;
 }
+/* Player two with nobody to take: the champion grid opens over the paused
+   game, player two picks, and that champion joins the company as theirs. */
+function openP2Join(){
+  if(mode!=='play'||dead) return false;
+  if(!twoP){ twoP=true; if(!pad.on && p1src==='pad') p1src='wasd'; }
+  mode='p2join'; paused=false; pauseEl.className='hidden';
+  chosen1=player.cls; if(!chosen2||chosen2===chosen1) chosen2=ROSTER[20].id; ready1=ready2=false;
+  selEl.className='joinmode'; document.querySelector('#select h1').textContent='PLAYER TWO - PICK A CHAMPION    Enter joins, Esc backs out';
+  paintSelect(); previewHero(chosen2);
+  return true;
+}
+function p2JoinConfirm(){
+  if(mode!=='p2join') return;
+  const m=joinParty(chosen2); m.p2=true;
+  const cur=p2Ally(); if(cur){ cur.p2=false; if(cur.member) cur.member.p2=false; }
+  deployAll(); hudAlly=null;
+  selEl.className='hidden'; mode='play'; refreshTwoP();
+  showMsg('PLAYER TWO JOINS AS '+HERO[chosen2].name.toUpperCase(),'straight from the roster');
+  beep(660,0.08,'square',0.05); beep(990,0.12,'square',0.05); beep(1320,0.2,'sine',0.05);
+}
+function p2JoinCancel(){ if(mode!=='p2join') return; selEl.className='hidden'; mode='play'; refreshTwoP(); }
 function dropOut(){
   const a=p2Ally(); if(!a) return;
   a.p2=false; if(a.member) a.member.p2=false;
@@ -3651,6 +3886,16 @@ function dropOut(){
   showMsg('PLAYER TWO STEPS BACK',HERO[a.cls].name+' follows again');
 }
 /* player two's frame: walk, face, fight - the shared tail of the follower code follows */
+/* two solid bodies of equal standing: each gives half the overlap, walls allowing */
+function shoveApart(a,b){
+  const BODY=(a.r||7)+(b.r||7)+1;
+  let dx=a.x-b.x, dy=a.y-b.y, d=Math.hypot(dx,dy);
+  if(d>=BODY) return;
+  if(d<0.01){ dx=1; dy=0; d=1; }
+  const push=(BODY-d)/2;
+  move(a,(dx/d)*push,(dy/d)*push);
+  move(b,-(dx/d)*push,-(dy/d)*push);
+}
 function p2Control(a){
   const inp=inputFor(2);
   let dx=inp.dx, dy=inp.dy;
@@ -3665,8 +3910,8 @@ function p2Control(a){
   }
   if(inp.aim){ a.aim=inp.aim; a.dir=spriteDir(inp.aim); a.face=inp.aim; }
   keepInView(a);
-  separate(a,player);
-  for(const o of allies) if(o!==a) separate(a,o);
+  shoveApart(a,player);                              // two heroes push each other, half each
+  for(const o of allies) if(o!==a && !o.p2) separate(o,a);   // followers step aside for player two
   bodySlam(a); unstick(a);
   if(a.member) a.member.hp=a.hp;
   if(a.cool>0) a.cool--;
@@ -3731,18 +3976,19 @@ function padMenuRow(){
   if(mode==='play'&&paused) return document.getElementById('pauseMenu');
   return null;
 }
+function padItems(row){ return [...row.children].filter(c=>c.style.display!=='none'); }
 function padHighlight(){
   const row=padMenuRow(); if(!row) return;
-  const n=row.children.length; if(!n) return;
+  const items=padItems(row), n=items.length; if(!n) return;
   padCursor=((padCursor%n)+n)%n;
-  for(let i=0;i<n;i++) row.children[i].classList.toggle('padsel',pad.on&&i===padCursor);
+  items.forEach((c,i)=>c.classList.toggle('padsel',pad.on&&i===padCursor));
 }
 function padConfirm(){
   if(mode==='cards') takeCard(padCursor);
   else if(mode==='shop') buyCard(padCursor);
   else if(mode==='super') grantSupercharge(padCursor);
   else if(mode==='heal') grantHeal(padCursor);
-  else if(mode==='play'&&paused){ if(padCursor===1) quitRun(); else togglePause(); }
+  else if(mode==='play'&&paused){ const row=padMenuRow(); const el=row&&padItems(row)[padCursor]; if(el&&el.id==='pauseQuit') quitRun(); else if(el&&el.id==='pauseInfo') openCodex(); else togglePause(); }
 }
 function padCycleLeader(dir){
   const list=allies.filter(a=>a.member&&!a.down);
@@ -3893,6 +4139,8 @@ function pollPad2(){
   if(!pad2.on){ pad2.on=true; padMap2=mapForPad(g).map; }
   const r=readPad(g,padMap2);
   pad2.x=r.x; pad2.y=r.y; pad2.aim=r.aim; pad2.fire=r.b.fire||r.b.rt||!!r.aim;
+  if(r.b.lb&&!pad2.lbWas) p2Cycle(-1); if(r.b.rb&&!pad2.rbWas) p2Cycle(1);
+  pad2.lbWas=r.b.lb; pad2.rbWas=r.b.rb;
 }
 function pollPad(){
   pollPad2();
@@ -3918,18 +4166,25 @@ function pollPad(){
   }
   if(mode!==padMode){ padMode=mode; padCursor=0; }
   const any=hit('fire')||hit('potion')||hit('elixir')||hit('heal')||hit('start');
-  if(mode==='title'){ if(hit('back')) handleKey('s'); else if(hit('elixir')&&loadRec()) continueRun(0); else if(any) handleKey('enter'); }
+  if(mode==='codex'){ if(hit('potion')||hit('back')||hit('start')) closeCodex(); return; }
+  if(mode==='p2join'){
+    if(step.left) moveCursor(2,-1,0); if(step.right) moveCursor(2,1,0); if(step.up) moveCursor(2,0,-1); if(step.down) moveCursor(2,0,1);
+    if(hit('fire')||hit('start')) p2JoinConfirm(); if(hit('potion')) p2JoinCancel();
+    return;
+  }
+  if(mode==='title'){ if(hit('back')) handleKey('s'); else if(hit('heal')) openCodex(); else if(hit('elixir')&&loadRec()) continueRun(0); else if(any) handleKey('enter'); }
   else if(mode==='sheet'){ if(hit('back')) handleKey('s'); else if(hit('fire')||hit('potion')||hit('start')) handleKey('escape'); }
   else if(mode==='gate'||mode==='fallen'){ if(any) handleKey('enter'); }
   else if(mode==='select'){
-    if(step.left) moveSelect(-1,0); if(step.right) moveSelect(1,0);
-    if(step.up) moveSelect(0,-1);   if(step.down) moveSelect(0,1);
-    if(hit('fire')||hit('start')) startGame();
+    const pn = (twoP&&p2src==='pad') ? 2 : 1;
+    if(step.left) moveCursor(pn,-1,0); if(step.right) moveCursor(pn,1,0);
+    if(step.up) moveCursor(pn,0,-1);   if(step.down) moveCursor(pn,0,1);
+    if(hit('fire')||hit('start')) confirmPick(pn);
     if(hit('elixir')&&loadRec()) continueRun(0);
     if(hit('back')||hit('heal')) startWithEveryone();
   }
   else if(padMenuRow()){                       // cards, shop, supercharge, tonic, pause
-    const row=padMenuRow(), n=row.children.length;
+    const row=padMenuRow(), n=padItems(row).length;
     const cols = mode==='shop' ? 2 : n;         // the merchant lays cards in two columns
     if(step.left)  padCursor--;
     if(step.right) padCursor++;
@@ -3946,8 +4201,8 @@ function pollPad(){
     if(hit('potion')) handleKey('b');
     if(hit('elixir')) handleKey('h');
     if(hit('heal')) handleKey('g');
-    if(hit('lb')) padCycleLeader(-1);
-    if(hit('rb')) padCycleLeader(1);
+    if(hit('lb')){ if(twoP&&p2src==='pad') p2Cycle(-1); else padCycleLeader(-1); }
+    if(hit('rb')){ if(twoP&&p2src==='pad') p2Cycle(1); else padCycleLeader(1); }
     if(hit('lt')){ const i=hotbar.findIndex(sl=>sl); if(i>=0) useSlot(i); }   // LT: first thing in the belt
   }
   if(any && AC && AC.state==='suspended') AC.resume().catch(()=>{});
@@ -3966,8 +4221,10 @@ function padRumble(ms,strong){
    Every potion you pick up lands in a slot at the foot of the screen. Press the
    slot's number to use it, or drag one slot onto another to reorder them.
    ========================================================================== */
-const HOT_SLOTS=6, STACK_MAX=9;
-let hotbar=new Array(HOT_SLOTS).fill(null), hotDirty=true, dragFrom=-1;
+const HOT_BASE=6, HOT_MAX=12, STACK_MAX=9;
+/* six slots to begin with; the Wider Belt card adds one at a time, up to twelve */
+function hotSlots(){ return Math.min(HOT_MAX, HOT_BASE+((up&&up.extraSlots)|0)); }
+let hotbar=new Array(HOT_BASE).fill(null), hotDirty=true, dragFrom=-1;
 /* the long-form description shown when you hover a slot */
 function hotInfo(kind){
   const K=HOT_KINDS[kind];
@@ -3998,7 +4255,7 @@ function hotInfo(kind){
     foot:'consumed on use'};
   if(kind==='tonic') return {name:'Follower Tonic', kind:'potion',
     desc:'Choose one follower and restore half their maximum health. '+
-         'Followers take real damage and die for good, so keep one spare.',
+         'Nobody in the company dies: the fallen lie where they drop and are up again in a minute.',
     foot:'consumed once a follower is chosen'};
   return {name:kind, kind:'', desc:'', foot:''};
 }
@@ -4027,6 +4284,7 @@ const HOT_KINDS={
   potion:{spr:'potion', name:'Blast Potion'},
   elixir:{spr:'elixir', name:'Health Draught'},
   heal:{spr:'heal', name:'Golden Draught'},
+  white:{spr:'white', name:'White Potion'},
   tonic:{spr:'tonic',  name:'Follower Tonic'},
   scrollHeal:{spr:'scrollHeal', name:'Scroll of Healing',     scroll:true},
   scrollF25:{spr:'scrollF25',   name:'Scroll of Mending',     scroll:true},
@@ -4047,13 +4305,13 @@ function addToHotbar(kind){
       if(sl.n>=full) return false;                                   // already full
       sl.n=full; hotDirty=true; return true;                         // recharged
     }
-    for(let i=0;i<HOT_SLOTS;i++) if(!hotbar[i]){
+    for(let i=0;i<hotSlots();i++) if(!hotbar[i]){
       hotbar[i]={t:kind,n:full}; hotDirty=true; return true;
     }
     return false;
   }
   for(const sl of hotbar) if(sl&&sl.t===kind&&sl.n<STACK_MAX){ sl.n++; hotDirty=true; return true; }
-  for(let i=0;i<HOT_SLOTS;i++) if(!hotbar[i]){ hotbar[i]={t:kind,n:1}; hotDirty=true; return true; }
+  for(let i=0;i<hotSlots();i++) if(!hotbar[i]){ hotbar[i]={t:kind,n:1}; hotDirty=true; return true; }
   return false;                                   // no room: leave it on the floor
 }
 function useSlot(i){
@@ -4074,6 +4332,15 @@ function useSlot(i){
     beep(660,0.1,'sine',0.06); beep(880,0.14,'sine',0.06); beep(1320,0.3,'sine',0.05);
     showMsg('GOLDEN DRAUGHT','the whole company restored');
     for(let k=0;k<24;k++) particles.push({x:player.x,y:player.y, vx:(rnd()-0.5)*3, vy:-rnd()*3, life:22+ri(14), c:k%2?C.yel:C.wht});
+  } else if(sl.t==='white'){
+    if(!gens.length){ showMsg('NO GENERATORS LEFT','the potion stays corked'); return; }
+    const n=gens.length;
+    for(const g of gens){ g.hp=0; score+=100; boom(g.x,g.y,C.wht); boom(g.x,g.y,'#9ad8ff'); }
+    gens=[];
+    whiteFlashT=18;
+    beep(880,0.12,'sine',0.07); beep(1320,0.16,'sine',0.06); beep(1760,0.4,'sine',0.06); beep(60,0.5,'sawtooth',0.08);
+    showMsg('THE GENERATORS CRUMBLE',n+' destroyed - +'+(n*100));
+    for(let k=0;k<40;k++) particles.push({x:player.x,y:player.y,vx:Math.cos(k)*(1+rnd()*4),vy:Math.sin(k*1.7)*(1+rnd()*4),life:26+ri(20),c:k%2?C.wht:'#9ad8ff'});
   } else if(sl.t==='elixir'){
     if(player.hp>=player.maxHp){ showMsg('ALREADY AT FULL HEALTH',''); return; }
     const heal=Math.round(player.maxHp*0.5);
@@ -4140,12 +4407,12 @@ function buildHotbar(){
   hideTip();
   const el=document.getElementById('hotbar');
   while(el.firstChild) el.removeChild(el.firstChild);
-  for(let i=0;i<HOT_SLOTS;i++){
+  for(let i=0;i<hotSlots();i++){
     const sl=hotbar[i];
     const d=document.createElement('div');
     d.className='slot'+(sl?' has':'');
     d.draggable=!!sl;
-    const k=document.createElement('div'); k.className='k'; k.textContent=(i+1);
+    const k=document.createElement('div'); k.className='k'; k.textContent= i<9 ? (i+1) : i===9 ? '0' : '·';
     d.appendChild(k);
     if(sl){
       const cv=document.createElement('canvas'); cv.width=24; cv.height=24;
@@ -4205,6 +4472,43 @@ function blastPotion(){
     vx:Math.cos(i)*(1+rnd()*3),vy:Math.sin(i*1.7)*(1+rnd()*3),life:26+ri(20),c:i%2?C.orgL:C.yel});
 }
 /* ==========================================================================
+   CATACLYSM
+   With the card, a clock runs: two minutes at rank one, ten seconds less per
+   rank down to one minute. When it strikes, every monster and generator in
+   view is destroyed - lords stand - and, at a chance that starts at 100% and
+   falls 15% a rank, every potion, draught, scroll and morsel in view burns.
+   ========================================================================== */
+let cataT=0, cataFlashT=0, hushFaded=false;
+const CONSUMABLE=new Set(['potion','white','elixir','heal','tonic','food','cache','scrollHeal','scrollF25','scrollF50','scrollF100','scrollCall']);
+function cataInterval(){ return [7200,6000,5400,4800,4200,3600][Math.max(0,Math.min(5,(up.cata|0)-1))]; }
+function cataBurnChance(){ return Math.max(0,1-0.15*((up.cata|0)-1)); }
+function inView(x,y){ return x>=camX-4 && x<=camX+CAM_W+4 && y>=camY-4 && y<=camY+CAM_H+4; }
+function updateCataclysm(){
+  if(!(up.cata>0)) return;
+  if(cataT>0){ cataT--; return; }
+  cataT=cataInterval();
+  let slain=0, gensGone=0, burned=0;
+  for(const e of enemies){ if(e.hp<=0||e.kind==='boss'||!inView(e.x,e.y)) continue; e.hp=-99; score+=e.pts; slain++; boom(e.x,e.y,C.orgL); }
+  cull();
+  for(const g of gens){ if(!inView(g.x,g.y)) continue; g.hp=0; gensGone++; score+=100; boom(g.x,g.y,C.wht); }
+  gens=gens.filter(g=>g.hp>0);
+  const burn = rnd()<cataBurnChance();
+  if(burn){
+    items=items.filter(it=>{ if(!CONSUMABLE.has(it.t)||!inView(it.tx*TILE+10,it.ty*TILE+10)) return true; burned++; boom(it.tx*TILE+10,it.ty*TILE+10,C.redL); return false; });
+  }
+  cataFlashT=22;
+  beep(50,0.9,'sawtooth',0.1); beep(200,0.4,'square',0.06); beep(1200,0.3,'sine',0.05);
+  showMsg('CATACLYSM', slain+' slain, '+gensGone+' generators'+(burned?', '+burned+' consumables burned':burn?', nothing to burn':', the stores were spared'));
+}
+function drawCataclysmClock(){
+  if(!(up.cata>0)||mode!=='play') return;
+  const sec=Math.ceil(cataT/60), m=(sec/60)|0, ss=String(sec%60).padStart(2,'0');
+  ctx.save(); ctx.font='bold 10px Courier New'; ctx.textAlign='left';
+  const txt='CATACLYSM '+m+':'+ss+'  burn '+Math.round(cataBurnChance()*100)+'%';
+  ctx.fillStyle='#000'; ctx.fillText(txt,9,15); ctx.fillStyle=sec<=5?C.redL:C.orgL; ctx.fillText(txt,8,14);
+  ctx.restore();
+}
+/* ==========================================================================
    EXPERIENCE AND UPGRADE CARDS
    Green jewels are scattered in finite numbers on every floor - generators spawn
    monsters forever, so kills must not be an XP source or a floor could be
@@ -4237,7 +4541,7 @@ function makeWallsExits(){
 function freshUpgrades(){
   return {atkRate:1, dmg:1, extraProj:0, bombs:0, bombInterval:600, moveSpd:1, orbs:0, orbSpeed:1, orbUptime:0.5,
           spirit:0, multi:0, flame:0, axe:0, echo:0, storm:0, freeze:0, loot:0, ward:0,
-          potionPower:1, extraPotions:0, enemySlow:1, extraFood:0, extraKeys:0,
+          potionPower:1, extraPotions:0, enemySlow:1, extraFood:0, extraKeys:0, extraSlots:0, cata:0, quiet:0, quietLeft:0,
           orbBonus:0, orbBonusLeft:0, pendRate:0, pendSpd:0, taken:{}};
 }
 up=freshUpgrades();
@@ -4293,6 +4597,39 @@ const CARDS=[
    go:()=>{ up.potionPower*=1.05; }},
   {id:'potn', ico:'⚱', k:'uti', tt:'Full Satchel',ds:'One extra potion each floor',
    go:()=>{ up.extraPotions++; addToHotbar('potion'); }},
+  {id:'blood', ico:'✠', k:'leg', tt:'Blood Warrior', ds:'A champion above all others joins the company', cap:1, w:0.22,
+   req:()=>level>20 && !party.some(m=>m.cls==='bloodwarrior'),      // only in the deep floors
+   go:()=>{ const m=joinParty('bloodwarrior'); deployAll(); hudAlly=null;
+            showMsg('THE BLOOD WARRIOR ANSWERS','click them, or a bumper, to take the lead');
+            beep(110,0.3,'sawtooth',0.08); beep(220,0.3,'square',0.06); beep(440,0.5,'sine',0.06); }},
+  {id:'cata', ico:'☄', k:'leg', tt:'Cataclysm', cap:6, w:0.22,
+   ds:'Every 2 min everything on screen dies, lords aside - and potions and food on screen burn too (100%, 15% less each rank; each rank also shortens the wait by 10s)',
+   go:()=>{ up.cata=Math.min(6,(up.cata|0)+1); cataT=cataInterval(); }},
+  {id:'quiet', ico:'☾', k:'uti', tt:'Hush', cap:10,
+   ds:'10% chance per rank that the next floor holds no monsters at all. Lasts twenty floors from the last pick, then fades',
+   go:()=>{ up.quiet=Math.min(10,(up.quiet|0)+1); up.quietLeft=20; }},
+  {id:'secrets', ico:'⚖', k:'uti', tt:'Secrets of the Gauntlet', ds:'Unlocks the Book of the Dungeon on the title screen, for good', cap:1, w:0.6,
+   req:()=>!secretsKnown(),
+   go:()=>{ try{ localStorage.setItem(SECRETS_KEY,'1'); }catch(e){} refreshInfoButtons();
+            showMsg('THE SECRETS OF THE GAUNTLET','the Book is yours - INFO on the title screen');
+            beep(660,0.1,'sine',0.05); beep(990,0.14,'sine',0.05); beep(1320,0.3,'sine',0.05); }},
+  {id:'bloodwight', ico:'☠', k:'leg', tt:'Blood Wight', ds:'A wight above all wights joins the company: fast, and its daggers bite from afar', cap:1, w:0.22,
+   req:()=>level>20 && !party.some(m=>m.cls==='bloodwight'),
+   go:()=>{ const m=joinParty('bloodwight'); deployAll(); hudAlly=null;
+            showMsg('THE BLOOD WIGHT RISES','click them, or a bumper, to take the lead');
+            beep(90,0.4,'sawtooth',0.08); beep(180,0.3,'square',0.06); beep(720,0.5,'sine',0.05); }},
+  {id:'bloodmage', ico:'☄', k:'leg', tt:'Blood Mage', ds:'A mage above all mages joins the company: purple flame, far and fast', cap:1, w:0.22,
+   req:()=>level>20 && !party.some(m=>m.cls==='bloodmage'),
+   go:()=>{ const m=joinParty('bloodmage'); deployAll(); hudAlly=null;
+            showMsg('THE BLOOD MAGE ANSWERS','click them, or a bumper, to take the lead');
+            beep(330,0.2,'sine',0.06); beep(660,0.2,'sine',0.06); beep(1320,0.6,'sine',0.06); }},
+  {id:'bloodgoat', ico:'♈', k:'leg', tt:'Blood Goat', ds:'A beast above all beasts joins the company: the fastest thing in the dungeon, and it hits like a wall', cap:1, w:0.22,
+   req:()=>level>20 && !party.some(m=>m.cls==='bloodgoat'),
+   go:()=>{ const m=joinParty('bloodgoat'); deployAll(); hudAlly=null;
+            showMsg('THE BLOOD GOAT CHARGES IN','click them, or a bumper, to take the lead');
+            beep(150,0.15,'square',0.07); beep(300,0.15,'square',0.07); beep(600,0.4,'sawtooth',0.05); }},
+  {id:'slots', ico:'▤', k:'uti', tt:'Wider Belt', ds:'One more belt slot, up to twelve', cap:6,
+   go:()=>{ up.extraSlots=Math.min(6,(up.extraSlots|0)+1); while(hotbar.length<hotSlots()) hotbar.push(null); hotDirty=true; }},
   {id:'slow', ico:'❄', k:'off', tt:'Binding Frost',ds:'Monsters move 5% slower',
    go:()=>{ up.enemySlow*=0.95; for(const e of enemies) e.sp*=0.95; }},
   {id:'frat', ico:'⚑', k:'ally', tt:'Sworn Ally', ds:'A random follower attacks 5% faster',
@@ -4457,7 +4794,18 @@ function quitRun(){
   beep(330,0.15,'square',0.05); beep(220,0.3,'triangle',0.05);
 }
 document.getElementById('pauseResume').onclick=()=>{ if(paused) togglePause(); };
+document.getElementById('pauseInfo').onclick=()=>{ if(!paused||!secretsKnown()) return; openCodex(); };
 document.getElementById('pauseQuit').onclick=quitRun;
+/* a trapdoor card: through the floor, and the gate opens on arrival. Fires when
+   the card screen closes, or when you leave the merchant who sold it. */
+function dropThroughFloor(){
+  if(!pendingSkip) return;
+  const n=pendingSkip; pendingSkip=0;
+  if(level>=LEVELS_TOTAL){ winRun(); return; }
+  level=Math.min(LEVELS_TOTAL,level+n);
+  boom(player.x,player.y,C.yel); beep(220,0.2,'sawtooth',0.05); beep(110,0.4,'sawtooth',0.05);
+  newLevel(true); openGate(level);
+}
 function takeCard(i){
   const c=offered[i]; if(!c) return;
   showMsg(c.tt.toUpperCase(),c.ds);            // first, so a card can speak over it
@@ -4469,13 +4817,7 @@ function takeCard(i){
   if(pendingCards>0) offerCards();
   else {
     cardsEl.className='hidden'; mode='play';
-    if(pendingSkip){                              // a trapdoor: through the floor, and the gate opens on arrival
-      const n=pendingSkip; pendingSkip=0;
-      if(level>=LEVELS_TOTAL){ winRun(); return; }
-      level=Math.min(LEVELS_TOTAL,level+n);
-      boom(player.x,player.y,C.yel); beep(220,0.2,'sawtooth',0.05); beep(110,0.4,'sawtooth',0.05);
-      newLevel(true); openGate(level);
-    }
+    dropThroughFloor();
   }
 }
 const DIRV={}; DIRS8.forEach(d=>{ DIRV[d[0]]=[d[1],d[2]]; });
@@ -4502,7 +4844,7 @@ function fire(who,dir){
   /* Close Melee begin with no missiles whatsoever. Split Shot can still grant
      them some, and those grants are the only things they ever throw. */
   const swordsman=(H.group==='melee');
-  const look = H.id==='mage' ? 'fire' : H.id==='sorcerer' ? 'ice' : null;   // what the missile looks like
+  const look = H.id==='mage' ? 'fire' : H.id==='sorcerer' ? 'ice' : H.id==='bloodwight' ? 'blood' : H.id==='bloodmage' ? 'violet' : null;   // what the missile looks like
   if(!swordsman) shots.push({x:who.x+v[0]*10, y:who.y+v[1]*10,
               vx:v[0]*SHOT_SPEED, vy:v[1]*SHOT_SPEED, dir,
               life:H.rng, pow, grp:H.group, look});
@@ -5054,6 +5396,7 @@ function update(){
   indexDoors();                                 // doors come and go as they are unlocked
   if(floorFrames===EXIT_ARROW_AT && !escapeAll) showMsg('THE WAY OUT','an arrow now marks the exit');
   updateTrail();
+  updateCataclysm();
   if(floorFrames%3600===0){                     // a full minute on this floor: the horde surges
     waveN++;
     showMsg('WAVE '+(waveN+1), 'the generators quicken - x'+genRate().toFixed(1));
@@ -5071,6 +5414,7 @@ function update(){
     if(frame%5===0) particles.push({x:player.x+(rnd()-0.5)*10,y:player.y-6,vx:0,vy:-0.5,life:12,c:'#5ad02a'});
   }
 
+  if(twoP && !p2Ally() && (keys['arrowleft']||keys['arrowright']||keys['arrowup']||keys['arrowdown']||keys['enter']||(p2src==='pad'&&(pad.x||pad.y))||(p2src==='pad2'&&(pad2.x||pad2.y)))) dropIn();
   const inp1=inputFor(1);
   let dx=inp1.dx, dy=inp1.dy;
   const PH=HERO[player.cls];
@@ -5224,7 +5568,24 @@ function update(){
       if(e.wardCd>0) e.wardCd--;
       continue;
     }
+    /* Sight. A monster has to notice you: a hero within nine tiles with a clear
+       line between, or close enough to hear. Then it hunts, and keeps hunting
+       for a few seconds after it loses you. Otherwise it mills about where it
+       is, which is what stops a whole floor pouring toward the door at once.
+       Lords always hunt; a skull senses you by distance alone, since it flies. */
+    if(e.kind!=='boss'){
+      const dd=Math.hypot(ddx,ddy);
+      if(e.aware>0) e.aware--;
+      if(((frame+(e.wob*100|0))%6)===0){
+        const reach = e.aware>0 ? DETECT_FAR : DETECT;
+        if(dd<reach && (e.kind==='skull' || dd<HEAR || clearShot(e.x,e.y,tgt.x,tgt.y))) e.aware=AWARE_T;
+      }
+    }
     if(e.kind==='boss'){ bossStalk(e,tgt,ddx,ddy); }
+    else if(!(e.aware>0)){                          // unaware: a slow drift, nothing more
+      if(e.wanderT>0){ e.wanderT--; if(e.kind==='skull'){ e.x+=e.wx*e.sp*0.4; e.y+=e.wy*e.sp*0.4; } else move(e,e.wx*e.sp*0.45,e.wy*e.sp*0.45); }
+      else if(rnd()<0.015){ e.wanderT=30+ri(50); const a=rnd()*6.283; e.wx=Math.cos(a); e.wy=Math.sin(a); }
+    }
     else if(e.kind==='skull'){                      // it flies: straight at you, over the walls
       const dd=Math.hypot(ddx,ddy)||1;
       if(dd>e.r+6){ e.x+=ddx/dd*e.sp; e.y+=ddy/dd*e.sp; }
@@ -5257,9 +5618,10 @@ function update(){
 
     if(e.shootCd>0) e.shootCd--;
     const RG=RANGED[e.kind];                        // lords fire from bossStalk
-    if(RG && e.shootCd<=0){
+    if(RG && e.shootCd<=0 && e.aware>0){
       const dd=Math.hypot(ddx,ddy);
-      if(dd<RG.range && dd>26){ e.shootCd=RG.cd; monsterFire(e,tgt,RG.k); }
+      /* it must actually see you to throw: a wall between means no shot */
+      if(dd<RG.range && dd>26 && clearShot(e.x,e.y,tgt.x,tgt.y)){ e.shootCd=RG.cd; monsterFire(e,tgt,RG.k); }
     }
     if(frame%(e.kind==='zombie'?Math.round(16/ENEMY_PACE):ENEMY_ANIM)===0) e.frame^=1;
     if(e.hurt>0) e.hurt--;
@@ -5268,6 +5630,7 @@ function update(){
     const reach=e.r+9;
     if(ax<reach&&ay<reach&&e.touch<=0){
       e.touch=22;                                   // one bite per enemy, not per frame
+      e.aware=AWARE_T;                              // whatever it bit, it has noticed
       const d=Math.hypot(ddx,ddy)||1;
       if(e.kind==='thief' && tgt===player){
         const take=Math.min(player.gold|0, 5+ri(10));
@@ -5294,6 +5657,7 @@ function update(){
       g.cd=Math.max(12, Math.round((130+ri(120))/genRate()));
       const spots=[[1,0],[-1,0],[0,1],[0,-1]].filter(d=>!isWall(g.tx+d[0],g.ty+d[1]));
       if(spots.length){ const d=spots[ri(spots.length)]; spawn(g.tx+d[0],g.ty+d[1],g.kind);
+        const born=enemies[enemies.length-1]; if(born){ born.x+=d[0]*3; born.y+=d[1]*3; born.face=dirFromVec(d[0],d[1]); }
         const col=g.kind==='ghost'?'#c8d0e8':C.org;
         for(let k=0;k<6;k++) particles.push({x:g.x+(rnd()-0.5)*8, y:g.y+(rnd()-0.5)*8, vx:(rnd()-0.5)*1.6, vy:(rnd()-0.5)*1.6-0.4, life:10+ri(8), c:k%2?col:C.wht}); }
     }
@@ -5311,6 +5675,12 @@ function update(){
     else if(p2pick&&!p2pick.down&&Math.abs(p2pick.x-cx)<=reach&&Math.abs(p2pick.y-cy)<=reach) who=p2pick;
     if(!who) continue;
     if(it.t==='door' && (Math.abs(who.x-cx)>15 && Math.abs(who.y-cy)>15)) continue; // no diagonal unlocks
+    if(it.t==='door'){                            // a door opens for someone walking INTO it, not past it
+      const wtx=(who.x/TILE)|0, wty=(who.y/TILE)|0, ddx=it.tx-wtx, ddy=it.ty-wty;
+      const inp = who===player ? {dx,dy} : inputFor(2);
+      const pushing = (Math.abs(ddx)+Math.abs(ddy)===1) && ((ddx&&Math.sign(inp.dx)===ddx)||(ddy&&Math.sign(inp.dy)===ddy));
+      if(!pushing) continue;
+    }
     if(it.t==='switch'){
       if(it.on) continue;
       it.on=true; theme.deco.dark=false; darkFadeT=DARK_FADE;
@@ -5342,6 +5712,24 @@ function update(){
     else if(it.t==='potion'){
       if(!addToHotbar('potion')) continue;        // hotbar full: it stays put
       items.splice(i,1); beep(740,0.12,'sine',0.06);
+    }
+    else if(it.t==='cache'){                     // the red cache: a clutch of potions, and now and then something rarer
+      let got=[];
+      for(let k=0;k<2+ri(2);k++) if(addToHotbar('potion')) got.push('potion');
+      if(rnd()<0.5 && addToHotbar('elixir')) got.push('elixir');
+      if(level>=8 && rnd()<0.2 && addToHotbar('white')) got.push('white');
+      if(!got.length){ showMsg('YOUR BELT IS FULL','make room and come back'); continue; }
+      items.splice(i,1);
+      boom(cx,cy,C.bluL); boom(cx,cy,C.wht);
+      beep(740,0.1,'sine',0.06); beep(1110,0.14,'sine',0.05); beep(1480,0.2,'sine',0.04);
+      const n=(k)=>got.filter(x=>x===k).length;
+      showMsg('A CACHE OF POTIONS', n('potion')+' blast'+(n('elixir')?', a health draught':'')+(n('white')?', and a WHITE potion':''));
+    }
+    else if(it.t==='white'){
+      if(!addToHotbar('white')) continue;
+      items.splice(i,1); beep(880,0.1,'sine',0.06); beep(1320,0.16,'sine',0.05);
+      const slot=hotbar.findIndex(sl=>sl&&sl.t==='white')+1;
+      showMsg('WHITE POTION','slot '+slot+' - X to drink: every generator on the floor is destroyed');
     }
     else if(it.t==='super'){                     // who gets it is the player's call
       items.splice(i,1);
@@ -5602,6 +5990,14 @@ function stepToward(e,dx,dy,sp){
 }
 function updateOneAlly(a){
   if(a.down) recoverDown(a);                       // out cold: still walks with the company, fights not at all
+  if(a.p2 && a.down){                              // player two's hero is down: straight onto the next one standing
+    const cands=allies.filter(o=>o!==a&&!o.down);
+    if(cands.length){
+      let best=null,bd=1e9; for(const o of cands){ const d=dist(o,a); if(d<bd){ bd=d; best=o; } }
+      p2Take(best);
+      showMsg(HERO[a.cls].name.toUpperCase()+' IS DOWN','player two carries on as '+HERO[best.cls].name);
+    } else if(!a.p2Waited){ a.p2Waited=true; showMsg(HERO[a.cls].name.toUpperCase()+' IS DOWN','nobody else standing - player two waits'); }
+  }
   if(a.p2 && !a.down){ p2Control(a); return; }     // player two steers this one
   /* Three seconds out of shot and a follower is recovered - but not by dumping
      them on top of the leader. They come back to the nearest free spot that is
@@ -5772,15 +6168,16 @@ function hurt(n,silent){
     player.hp=0;
     const fallenCls=player.cls;
     boom(player.x,player.y,C.redL); boom(player.x,player.y,C.yel);
-    party.shift();                              // the fallen leave the succession
-    if(!party.length){ endRun(fallenCls); return; }
-    // the next in line takes over, keeping the health pool they had left -
-    // someone still on their feet if there is one, else the first is shaken awake
-    let hi=party.findIndex(m=>!m.down); if(hi<0) hi=0;
-    if(hi>0){ const [w]=party.splice(hi,1); party.unshift(w); }
+    /* Nobody leaves the company. The fallen hero goes down where they stand
+       and recovers over the next minute like any follower; the next one
+       standing takes over. Only when everyone is on the floor at once is
+       the run over. */
+    const fallen=party[0]; fallen.down=true; fallen.downT=0; fallen.hp=0; fallen.super=false; fallen.p2=false;
+    const hi=party.findIndex(m=>!m.down);
+    if(hi<0){ endRun(fallenCls); return; }
+    const [w]=party.splice(hi,1); party.unshift(w);
     const heir=party[0];
     if(heir.p2){ heir.p2=false; const pa=allyFor(heir); if(pa) pa.p2=false; showMsg('PLAYER TWO\'S CHAMPION TAKES THE LEAD','press Enter to take another follower'); }
-    if(heir.down){ heir.down=false; heir.downT=0; heir.hp=Math.max(heir.hp,Math.round(heir.maxHp*0.2)); }
     heir.onField=false;
     const ent=allyFor(heir);                     // step into the heir's boots
     if(ent){ player.x=ent.x; player.y=ent.y; allies=allies.filter(a=>a!==ent); }
@@ -5839,7 +6236,7 @@ function endRun(fallenCls){
   dead=true; mode='title';
   cardsEl.className='hidden'; pauseEl.className='hidden'; fallenEl.className='hidden';
   paused=false;
-  showTitle(HERO[fallenCls].name.toUpperCase()+' DIED WITH NO FOLLOWERS LEFT');
+  showTitle(HERO[fallenCls].name.toUpperCase()+' FELL WITH THE WHOLE COMPANY DOWN');
   beep(140,0.5,'sawtooth',0.09); beep(90,0.7,'triangle',0.07);
 }
 
@@ -6082,12 +6479,12 @@ function draw(){
     }
   }
   for(const g of gens){
-    const tier=genTier(g), f=((frame+g.tx*3)>>3)%GEN_FRAMES, skull=g.kind!=='ghost';
-    /* a pulse of light on the floor, warmer for fire, colder for the bone pile */
+    const tier=genTier(g), f=((frame+g.tx*3)>>3)%GEN_FRAMES, skull=g.kind==='grunt', pool=g.kind==='slime';
+    /* a pulse of light on the floor, warmer for fire, colder for the bone pile, the slime's own colour for the pool */
     ctx.globalAlpha=(0.14+0.06*Math.sin((frame+g.tx*7)/9))*(1-tier*0.3);
-    pxDisc(ctx,g.tx*TILE+10,g.ty*TILE+12,12,skull?C.org:'#9ad8ff');
+    pxDisc(ctx,g.tx*TILE+10,g.ty*TILE+12,12,skull?C.org:pool?SLIME_TIERS[slimeTopTier()].light:'#9ad8ff');
     ctx.globalAlpha=1;
-    ctx.drawImage((skull?SPR.genSkull:SPR.genBones)[tier][f], g.tx*TILE-4, g.ty*TILE-8);
+    ctx.drawImage((skull?SPR.genSkull:pool?poolSprites():SPR.genBones)[tier][f], g.tx*TILE-4, g.ty*TILE-8);
     if(skull && tier<2 && frame%(9+tier*6)===0)                        // embers drift up off the fire
       particles.push({x:g.tx*TILE+8+ri(5), y:g.ty*TILE+4, vx:(rnd()-0.5)*0.4, vy:-0.5-rnd()*0.5, life:14+ri(10), c:rnd()<0.5?C.orgL:C.org});
   }
@@ -6103,6 +6500,17 @@ function draw(){
     if(s.look==='fire'){                          // the mage's fireball
       pxDisc(ctx,x,y,5,C.orgD); pxDisc(ctx,x-1,y-1,3,C.org); pxDisc(ctx,x-1,y-1,1,C.yel);
       if(frame%2===0) particles.push({x:x-s.vx*2,y:y-s.vy*2,vx:(rnd()-0.5)*0.6,vy:-0.4-rnd()*0.4,life:7+ri(5),c:rnd()<0.5?C.orgL:C.org});
+      continue;
+    }
+    if(s.look==='violet'){                        // the blood mage's purple flame
+      const pu=(frame>>1)&1;
+      pxDisc(ctx,x,y,6,'#4a1a70'); pxDisc(ctx,x-1,y-1,pu?4:3,'#a24bd0'); pxDisc(ctx,x-1,y-2,2,'#e0a0ff'); ctx.fillStyle=C.wht; ctx.fillRect(x-1,y-2,1,1);
+      if(frame%2===0) particles.push({x:x-s.vx*2,y:y-s.vy*2,vx:(rnd()-0.5)*0.7,vy:-0.3-rnd()*0.5,life:9+ri(6),c:rnd()<0.5?'#e0a0ff':'#a24bd0'});
+      continue;
+    }
+    if(s.look==='blood'){                         // the blood wight's dagger of light
+      pxDisc(ctx,x,y,5,'#4a0008'); pxDisc(ctx,x,y,3,'#cc2418'); ctx.fillStyle='#ff6a6a'; ctx.fillRect(x-1,y-1,2,2);
+      if(frame%2===0) particles.push({x:x-s.vx*2,y:y-s.vy*2,vx:(rnd()-0.5)*0.4,vy:(rnd()-0.5)*0.4,life:8+ri(5),c:rnd()<0.5?'#ff2a2a':'#4a0008'});
       continue;
     }
     if(s.look==='ice'){                           // the sorcerer's ice ball
@@ -6264,6 +6672,9 @@ function draw(){
   ctx.globalAlpha=1;
 
   ctx.setTransform(1,0,0,1,0,0);                 // back to screen space
+  if(whiteFlashT>0){ ctx.fillStyle='rgba(255,255,255,'+(whiteFlashT--/18*0.8).toFixed(2)+')'; ctx.fillRect(0,0,VIEW,VIEW); }
+  if(cataFlashT>0){ ctx.fillStyle='rgba(255,120,40,'+(cataFlashT--/22*0.7).toFixed(2)+')'; ctx.fillRect(0,0,VIEW,VIEW); }
+  drawCataclysmClock();
   drawMist();
   drawDarkness();
   drawPrisonerArrow();
@@ -6342,6 +6753,58 @@ function pickFromSide(i){
 compCv.addEventListener('mousemove',ev=>{ compHover=companyIndexAt(ev); });
 compCv.addEventListener('mouseleave',()=>{ compHover=-1; });
 compCv.addEventListener('mousedown',ev=>{ pickFromSide(companyIndexAt(ev)); ev.preventDefault(); });
+/* ---------------------------------------------------- player two's window
+   A grid of the followers player two may take: everyone but the leader, the
+   one held now boxed in red, the knocked-out greyed. Click one, or press Tab
+   to cycle, or the pad's bumpers. */
+const p2Cv=document.getElementById('p2company'), p2Ctx=p2Cv.getContext('2d');
+let p2Cell=20, p2Cols=7, p2Hover=-1;
+function p2Candidates(){ return allies.filter(a=>a.member); }
+function drawP2Company(){
+  const W=p2Cv.width, H=p2Cv.height; p2Ctx.clearRect(0,0,W,H);
+  const list=p2Candidates(), n=list.length; if(!n) return;
+  let cell=20, cols=Math.max(1,Math.floor(W/cell));
+  while(cell>7 && Math.ceil(n/cols)*(cell+3) > H){ cell--; cols=Math.max(1,Math.floor(W/cell)); }
+  p2Cell=cell; p2Cols=cols;
+  list.forEach((a,i)=>{
+    const cx=(i%cols)*cell, cy=Math.floor(i/cols)*(cell+3), sz=cell-2;
+    if(a.p2){ p2Ctx.fillStyle='rgba(255,90,74,0.35)'; p2Ctx.fillRect(cx,cy,sz,sz); }
+    if(i===p2Hover){ p2Ctx.fillStyle='rgba(255,210,60,0.28)'; p2Ctx.fillRect(cx,cy,sz,sz); }
+    p2Ctx.globalAlpha=a.down?0.35:1;
+    p2Ctx.drawImage(HSPR[a.cls].down[0],cx,cy,sz,sz);
+    p2Ctx.globalAlpha=1;
+    if(a.p2){ p2Ctx.strokeStyle='#ff5a4a'; p2Ctx.lineWidth=1; p2Ctx.strokeRect(cx+0.5,cy+0.5,sz-1,sz-1); }
+    const frac=Math.max(0,Math.min(1,a.hp/a.maxHp));
+    p2Ctx.fillStyle='#2a0c10'; p2Ctx.fillRect(cx,cy+sz,sz,2);
+    p2Ctx.fillStyle=frac>0.5?'#39d24a':frac>0.25?'#ffd23c':'#c81830'; p2Ctx.fillRect(cx,cy+sz,Math.round(sz*frac),2);
+  });
+}
+function p2IndexAt(ev){
+  const q=canvasPoint(p2Cv,ev);
+  const col=Math.floor(q.x/p2Cell), row=Math.floor(q.y/(p2Cell+3));
+  if(col<0||col>=p2Cols||row<0) return -1;
+  const i=row*p2Cols+col; return i<p2Candidates().length ? i : -1;
+}
+function p2Take(a){
+  if(!a||mode!=='play'||dead) return false;
+  if(a.p2) return false;
+  if(a.down){ showMsg(HERO[a.cls].name.toUpperCase()+' IS OUT COLD','player two: pick someone standing'); return false; }
+  const cur=p2Ally(); if(cur){ cur.p2=false; cur.p2Waited=false; if(cur.member) cur.member.p2=false; }
+  a.p2=true; if(a.member) a.member.p2=true;
+  if(!twoP){ twoP=true; if(!pad.on && p1src==='pad') p1src='wasd'; }
+  showMsg('PLAYER TWO TAKES '+HERO[a.cls].name.toUpperCase(),'');
+  beep(520,0.06,'square',0.05); beep(780,0.1,'sine',0.05);
+  return true;
+}
+function p2Cycle(dir){
+  const list=p2Candidates().filter(a=>!a.down); if(!list.length){ openP2Join(); return; }
+  const cur=p2Ally(); let i=cur?list.indexOf(cur):-1;
+  for(let k=0;k<list.length;k++){ i=((i+dir)%list.length+list.length)%list.length; if(list[i]!==cur){ p2Take(list[i]); return; } }
+}
+p2Cv.addEventListener('mousemove',ev=>{ p2Hover=p2IndexAt(ev); });
+p2Cv.addEventListener('mouseleave',()=>{ p2Hover=-1; });
+p2Cv.addEventListener('mousedown',ev=>{ const i=p2IndexAt(ev); if(i>=0) p2Take(p2Candidates()[i]); else if(!p2Candidates().some(a=>!a.down)) openP2Join(); ev.preventDefault(); });
+document.getElementById('p2Name').addEventListener('mousedown',()=>{ if(!p2Ally()) dropIn(); });
 document.getElementById('lives').addEventListener('mousedown',ev=>{
   const q=canvasPoint(ev.currentTarget,ev);
   const i=Math.floor(q.x/16)+1;                   // the strip starts at the heir
@@ -6387,7 +6850,7 @@ function drawHUD(){
   document.getElementById('xplv').textContent='LV '+xpLevel;
   document.getElementById('xpnum').textContent=left+(left===1?' gem to level':' gems to level');
   const gN=document.getElementById('goldN');
-  gN.textContent=player.gold|0; gN.style.color=(player.gold>=CARD_PRICE)?'#ffd23c':'#8a7a3a';
+  gN.textContent=player.gold|0; gN.style.color=(player.gold>=cardPrice())?'#ffd23c':'#8a7a3a';
   document.getElementById('keyN').textContent=player.keys|0;
   const ks=document.getElementById('keySN'), kr=document.getElementById('keyRN');
   ks.textContent=player.keysSilver|0; ks.style.color=player.keysSilver?'#d8d8e8':'#5a5a6a';
@@ -6397,6 +6860,9 @@ function drawHUD(){
   const queued=Math.max(0,party.length-1);       // never negative once the party empties
   drawCompany();
   const p2h=twoP?p2Ally():null;
+  const p2box=document.getElementById('p2box');
+  if(twoP){ p2box.className=''; document.getElementById('p2Name').textContent = p2h ? 'P2: '+HERO[p2h.cls].name+'  HP '+Math.max(0,Math.round(p2h.hp)) : 'PLAYER TWO: nobody held'; drawP2Company(); }
+  else p2box.className='hidden';
   document.getElementById('allySub').textContent =
       p2h ? 'P2: '+HERO[p2h.cls].name+'  HP '+Math.max(0,Math.round(p2h.hp))+(p2h.down?' (down)':'')
     : heir ? 'next in line: '+HERO[heir.cls].name+'  HP '+Math.max(0,Math.round(heir.hp))+
@@ -6498,16 +6964,18 @@ function grantSupercharge(i){
    Ten gold apiece, and each one in the case is sold only once.
    ========================================================================== */
 const shopEl=document.getElementById('shop'), shopRow=document.getElementById('shopRow');
-const CARD_PRICE=10;
+/* the merchant's price climbs with the depth: ten gold on floors 1-10, twenty on 11-20, thirty on 21-30, and so on */
+function cardPrice(){ return 10*Math.max(1,Math.ceil(level/10)); }
 function updateShopUI(){
   if(!shop) return;
   document.getElementById('shopGold').textContent=player.gold|0;
+  document.getElementById('shopPrice').textContent=cardPrice();
   while(shopRow.firstChild) shopRow.removeChild(shopRow.firstChild);
   shop.stock.forEach((id,i)=>{
     const c=CARDS.find(x=>x.id===id); if(!c) return;
     const sold=shop.sold.indexOf(i)>=0;
     const maxed=c.cap&&(up.taken[c.id]||0)>=c.cap;
-    const broke=(player.gold|0)<CARD_PRICE;
+    const broke=(player.gold|0)<cardPrice();
     const d=document.createElement('div');
     d.className='buy'+(sold?' sold':(maxed||broke?' cant':''));
     const g=document.createElement('div'); g.className='g'; g.textContent=c.ico+TXT;
@@ -6517,7 +6985,7 @@ function updateShopUI(){
     const ds=document.createElement('div'); ds.className='bd'; ds.textContent=c.ds;
     t.appendChild(n); t.appendChild(ds);
     const pr=document.createElement('div'); pr.className='bp';
-    pr.textContent = sold?'sold' : maxed?'max' : CARD_PRICE+'g';
+    pr.textContent = sold?'sold' : maxed?'max' : cardPrice()+'g';
     d.appendChild(g); d.appendChild(t); d.appendChild(pr);
     d.onclick=()=>buyCard(i);
     shopRow.appendChild(d);
@@ -6532,19 +7000,20 @@ function openShop(){
 function closeShop(){
   if(mode!=='shop') return;
   shopEl.className='hidden'; mode='play'; shopCd=90;   // a moment before it reopens
+  dropThroughFloor();                                  // a trapdoor bought here opens the moment you leave
 }
 function buyCard(i){
   if(!shop||mode!=='shop') return;
   const id=shop.stock[i], c=CARDS.find(x=>x.id===id);
   if(!c||shop.sold.indexOf(i)>=0) return;
   if(c.cap&&(up.taken[c.id]||0)>=c.cap){ showMsg('ALREADY AT ITS LIMIT',''); return; }
-  if((player.gold|0)<CARD_PRICE){ showMsg('NOT ENOUGH GOLD','cards are '+CARD_PRICE+' each'); return; }
-  player.gold-=CARD_PRICE;
+  if((player.gold|0)<cardPrice()){ showMsg('NOT ENOUGH GOLD','cards are '+cardPrice()+' each'); return; }
+  player.gold-=cardPrice();
   shop.sold.push(i);
   c.go();
   up.taken[c.id]=(up.taken[c.id]||0)+1;
   updateTray(); bumpTray(); updateShopUI();
-  showMsg(c.tt.toUpperCase()+' BOUGHT','-'+CARD_PRICE+' gold');
+  showMsg(c.tt.toUpperCase()+' BOUGHT','-'+cardPrice()+' gold');
   beep(660,0.08,'square',0.05); beep(990,0.14,'sine',0.05);
 }
 /* ==========================================================================
@@ -6634,23 +7103,164 @@ function drawSheet(){
       ctx.drawImage(set.f8[0][1],x,30,36,36); ctx.drawImage(set.f8[6][1],x,62,36,36);
       ctx.fillStyle='#8a8a9a'; ctx.font='8px Courier New'; ctx.textAlign='left'; ctx.fillText(k.slice(0,7),x+1,104); });
     label('generators: fresh / damaged / failing',12,112);
-    for(let t=0;t<GEN_TIERS;t++){ ctx.drawImage(SPR.genSkull[t][0],12+t*50,120,48,48); ctx.drawImage(SPR.genBones[t][0],180+t*50,120,48,48); }
-    label('slimes, snake, lobber, thief, skull, Death',340,112);
-    Object.keys(SLIME_TIERS).forEach((k,i)=>ctx.drawImage(SPR[k][0],340+i*40,118,40,40));
-    ctx.drawImage(SPR.snake[0],340,158,40,40); ctx.drawImage(MSPR.lobber.f8[0][1],380,158,40,40); ctx.drawImage(MSPR.thief.f8[0][1],420,158,40,40); ctx.drawImage(SPR.skull[0],460,156,44,44); ctx.drawImage(DEATH_SPR.f8[0][1],504,152,48,48);
-    label('lords: base / greater / elder',12,196);
+    for(let t=0;t<GEN_TIERS;t++){ ctx.drawImage(SPR.genSkull[t][0],12+t*44,120,44,44); ctx.drawImage(SPR.genBones[t][0],150+t*44,120,44,44); ctx.drawImage(poolSprites()[t][0],290+t*44,120,44,44); }
+    label('slimes, snake, lobber, thief, skull, Death',12,176);
+    Object.keys(SLIME_TIERS).forEach((k,i)=>ctx.drawImage(SPR[k][0],12+i*40,180,40,40));
+    ctx.drawImage(SPR.snake[0],220,180,40,40); ctx.drawImage(MSPR.lobber.f8[0][1],260,180,40,40); ctx.drawImage(MSPR.thief.f8[0][1],300,180,40,40); ctx.drawImage(SPR.skull[0],340,178,44,44); ctx.drawImage(DEATH_SPR.f8[0][1],386,174,48,48);
+    label('lords: base / greater / elder',12,236);
+    label('the crimson four',400,176); ctx.drawImage(HSPR.bloodwarrior.f8[0][1],400,178,40,40); ctx.drawImage(HSPR.bloodwight.f8[0][1],438,178,40,40);
+    ctx.drawImage(HSPR.bloodmage.f8[0][1],476,178,40,40); ctx.drawImage(HSPR.bloodgoat.down[0],514,178,40,40);
     let k=0;
     Object.keys(BOSS_SPR).slice(0,4).forEach(bi=>{
-      BOSS_SPR[bi].forEach((cyc,c)=>{ ctx.drawImage(cyc[0],12+(k%6)*90,204+((k/6)|0)*96,84,84); k++; });
+      BOSS_SPR[bi].forEach((cyc,c)=>{ ctx.drawImage(cyc[0],12+(k%6)*90,242+((k/6)|0)*78,72,72); k++; });
     });
     label('items and pickups',12,410);
-    ['orb','coin','key','keySilver','keyRed','potion','elixir','heal','tonic','hoard','feast','relic','super']
+    ['orb','coin','key','keySilver','keyRed','potion','white','elixir','heal','tonic','hoard','feast','relic']
       .forEach((n,i)=>{ if(SPR[n]) ctx.drawImage(SPR[n],12+i*44,418,40,40); });
     label('bolts and thrown things',12,476);
     [SPR.eshot,SPR.bomb,SPR.ward,SPR.flame[0],SPR.axeThrown[0],SPR.axeThrown[1],SPR.shot8.right]
       .forEach((im,i)=>{ if(im) ctx.drawImage(im,12+i*44,484,40,40); });
   }
 }
+/* ==========================================================================
+   THE BOOK - the info page off the title screen. Built from the game's own
+   tables, so it stays true as those change: every champion, monster, lord,
+   pickup and card, with a few words on how the dungeon works.
+   ========================================================================== */
+const MONSTER_INFO=[
+  ['grunt','Grunt','floor 1','the common soldier of the dungeon; bites'],
+  ['ghost','Ghost','floor 1','fragile and fast; it hits you by touching, and dies doing it'],
+  ['demon','Demon','floor 3','tough; throws bolts'],
+  ['goblin','Goblin','floor 3','quick; throws spears'],
+  ['skeleton','Skeleton','floor 8','throws shuriken'],
+  ['zombie','Zombie','floor 12','slow and very tough; a heavy bite'],
+  ['sorcerer','Sorcerer','floors 20-29, then rarely','invisible half the time; you cannot aim at what you cannot see; bolts'],
+  ['troll','Troll','floors 30-39, then rarely','spits acid'],
+  ['redskel','Red Skeleton','floors 40-49, then rarely','throws axes'],
+  ['blackghost','Black Ghost','floors 50-59, then rarely','ectoplasm'],
+  ['spider','Spider','floors 60-69, then rarely','webs that slow you'],
+  ['firedemon','Fire Demon','floors 70-79, then rarely','fireballs'],
+  ['blackskel','Black Skeleton','floors 80-89, then rarely','fire orbs that take three shots to stop'],
+  ['snake','Snake','floor 4','slow; spits venom that poisons you for a while'],
+  ['lobber','Lobber','floor 5','hurls slow rocks over the walls; they only hit while low'],
+  ['skull','Flying Skull','floor 7','flies straight through walls; spits blue fire that does too'],
+  ['thief','Thief','floor 3','steals gold on touch and runs; kill it and it drops the lot plus extra'],
+  ['slimeG','Green Slime','floor 2','slow, weak; slimes breed from pools in their own nests'],
+  ['slimeB','Blue Slime','floor 9','a little stronger'],
+  ['slimeO','Orange Slime','floor 18','stronger again'],
+  ['slimeR','Red Slime','floor 35','strong'],
+  ['slimeP','Purple Slime','floor 50','the strongest slime'],
+  ['death','Death','every fourth floor from 6','no weapon touches it; it drains whoever it holds until it has taken a life, then fades. A blue potion destroys it']
+];
+const PICKUP_INFO=[
+  ['potion','Blast Potion','B, or its slot: kills every ordinary monster in range and damages generators; lords and Death shrug it off... except Death, which it destroys'],
+  ['white','White Potion','X: destroys every generator on the floor. Rare'],
+  ['elixir','Health Draught','H: half your health back'],
+  ['heal','Golden Draught','G: the whole company to full, the fallen back on their feet'],
+  ['tonic','Follower Tonic','mends one follower of your choosing'],
+  ['food','Food','+100 health on the spot'],
+  ['treasure','Treasure','100 points'],
+  ['coin','Coin','gold for the merchant'],
+  ['orb','Green Jewel','experience: fill the bar for a card'],
+  ['key','Gold Key','opens gold doors; they stay on this floor'],
+  ['keySilver','Silver Key','opens silver vaults, which hold red keys'],
+  ['keyRed','Red Key','opens red strongrooms and red potion caches'],
+  ['cache','Potion Cache','behind a red door: a clutch of potions, sometimes rarer'],
+  ['fountain','Fountain','touch it to save the run; continue from the title screen'],
+  ['switch','Light Switch','on a dark floor: turns the lights on'],
+  ['doorLeverOff','Door Lever','opens the keyless grey door near it'],
+  ['super','Supercharge','one champion untouchable and doubled for the floor'],
+  ['exit','Exit','the way down. After three minutes an arrow points to it; after four, a trail of light'],
+  ['scrollHeal','Scrolls','one-use magics: healing, mending, restoration, renewal, summoning']
+];
+const codexEl=document.getElementById('codex');
+function codexIcon(img,size){
+  const cv=document.createElement('canvas'); cv.width=size; cv.height=size;
+  const c=cv.getContext('2d'); c.imageSmoothingEnabled=false;
+  if(img) c.drawImage(img,0,0,size,size);
+  return cv;
+}
+function codexEntry(parent,img,name,desc,cls){
+  const d=document.createElement('div'); d.className='ent'+(cls?' '+cls:'');
+  if(typeof img==='string'){ const i=document.createElement('div'); i.className='ico'; i.textContent=img; d.appendChild(i); }
+  else d.appendChild(codexIcon(img,28));
+  const t=document.createElement('div');
+  const n=document.createElement('div'); n.className='nm'; n.textContent=name;
+  const ds=document.createElement('div'); ds.className='ds'; ds.textContent=desc;
+  t.appendChild(n); t.appendChild(ds); d.appendChild(t); parent.appendChild(d);
+}
+function buildCodex(){
+  const b=document.getElementById('codexBody'); while(b.firstChild) b.removeChild(b.firstChild);
+  const h=(t)=>{ const e=document.createElement('h2'); e.textContent=t; b.appendChild(e); };
+  const para=(t)=>{ const e=document.createElement('p'); e.textContent=t; b.appendChild(e); };
+  const grid=()=>{ const g=document.createElement('div'); g.className='grid'; b.appendChild(g); return g; };
+  const hint=document.createElement('div'); hint.className='hint'; hint.textContent='I or Esc closes  -  scroll for more'; b.appendChild(hint);
+  const t1=document.createElement('h1'); t1.textContent='THE BOOK OF THE DUNGEON'; b.appendChild(t1);
+  const sub=document.createElement('div'); sub.className='sub'; sub.textContent='twenty-five champions, one hundred floors, no way back'; b.appendChild(sub);
+  h('HOW IT WORKS');
+  para('Find the exit on every floor. Monsters pour out of generators until you break them, and every minute you linger the generators quicken. Green jewels fill your experience bar; each full bar offers three cards, and the cards belong to the run: they survive the death of the hero who earned them.');
+  para('Champions found in cages join your company and fight beside you. Nobody dies: a fallen champion lies where they drop and is up again within a minute. When your hero falls the next one standing takes over; only when everyone is down at once is the run over. Click a follower on the floor or in the side panel to take the lead as them.');
+  para('Stand still for thirty seconds and the doors give up; two minutes and every wall becomes a way out. A merchant waits every sixth floor; his cards cost ten gold on floors one to ten, twenty on eleven to twenty, and ten more for every ten floors after. Floors follow a nine-floor size cycle: normal, large, vast, small, normal, tiny, normal, large, normal. A lord holds every fifth floor and a red strongroom every fourth. Some floors are dark: find the switch.');
+  para('Keys: WASD or arrows move, space fires, B potion, H draught, G golden draught, X white potion, 1-9 and 0 the belt, P pause, Q quit from the pause menu. Enter brings a second player in on a follower (arrows and Enter), Backspace lets go. A gamepad works too: G on the title screen teaches the game any pad.');
+  h('CHAMPIONS');
+  let g=grid();
+  ROSTER.forEach(hh=>codexEntry(g,HSPR[hh.id].down[0],hh.name,groupOf(hh.id).name+'  -  HP '+hh.hp+'  speed '+hh.spd.toFixed(2)+'  power '+hh.pow+(hh.group==='melee'?'  sword':'  range '+hh.rng)));
+  codexEntry(g,HSPR.bloodwarrior.f8[0][1],'Blood Warrior','not on the pick screen: the rare crimson card brings one, only past floor 20. HP 2000  speed 1.12  power 7  -  above every warrior',
+             'leg');
+  codexEntry(g,HSPR.bloodwight.f8[0][1],'Blood Wight','likewise, its own crimson card past floor 20. HP 1500  speed 1.30  power 6  range 130  -  above every undead',
+             'leg');
+  codexEntry(g,HSPR.bloodmage.f8[0][1],'Blood Mage','the third crimson card past floor 20. HP 1300  speed 1.15  power 7  range 150  -  purple flame, above every magic user',
+             'leg');
+  codexEntry(g,HSPR.bloodgoat.down[0],'Blood Goat','the fourth crimson card past floor 20. HP 1800  speed 1.45  power 8  -  the fastest thing in the dungeon, above every beast',
+             'leg');
+  h('MONSTERS');
+  g=grid();
+  for(const [k,name,from,note] of MONSTER_INFO){
+    const img = k==='death' ? DEATH_SPR.f8[0][1] : SLIME_TIERS[k] ? SPR[k][0] : k==='snake' ? SPR.snake[0] : k==='skull' ? SPR.skull[0] : (MSPR[k]&&MSPR[k].f8[0][1]);
+    codexEntry(g,img,name,'from '+from+'  -  '+note);
+  }
+  h('GENERATORS');
+  g=grid();
+  codexEntry(g,SPR.genSkull[0][0],'Skull Altar','breeds grunts; the fire gutters and the skull cracks as you break it');
+  codexEntry(g,SPR.genBones[0][0],'Bone Pile','breeds ghosts; a wisp rises from it');
+  codexEntry(g,poolSprites()[0][0],'Slime Pool','breeds this floor\'s slimes, in its own nest away from the rest');
+  h('LORDS');
+  para('Eight lords, one every fifth floor, each pass of the roster recoloured, bigger and stronger: base, then Greater, then Elder. Potions do not touch a lord.');
+  g=grid();
+  BOSSES.forEach((bs,i)=>{ const set=BOSS_SPR[i]&&BOSS_SPR[i][0]; const img=set&&(set.f8?set.f8[0][1]:set[0]); codexEntry(g,img,bs.name,'body of a '+bs.base+'  -  speed '+bs.sp+'  health x'+bs.hp+'  bite x'+bs.dmg); });
+  h('POTIONS AND PICKUPS');
+  g=grid();
+  for(const [k,name,note] of PICKUP_INFO){ const spr=SPR[k]; codexEntry(g,Array.isArray(spr)?spr[0]:spr,name,note); }
+  h('CARDS');
+  para('Three are offered each time the bar fills; a card that is maxed stops appearing. The crimson one is rare.');
+  g=grid();
+  CARDS.forEach(c=>codexEntry(g,c.ico+TXT,c.tt,c.ds+(c.cap?'  (up to '+c.cap+')':''),c.k==='leg'?'leg':''));
+}
+let codexFrom='title';
+const SECRETS_KEY='armyOfGauntlet.secrets';
+function secretsKnown(){ try{ return localStorage.getItem(SECRETS_KEY)==='1'; }catch(e){ return false; } }
+function refreshInfoButtons(){
+  const known=secretsKnown();
+  const pb=document.getElementById('pauseInfo'); if(pb) pb.style.display=known?'':'none';
+  for(const id of ['infoBtn','infoBtn2']){
+    const b=document.getElementById(id); if(!b) continue;
+    b.disabled=!known; b.className=known?'':'locked';
+    b.textContent=known?'INFO':'INFO (sealed)';
+    b.title=known?'every creature, lord, potion and card, and how the dungeon works':'sealed - find the card Secrets of the Gauntlet in a run';
+  }
+}
+function openCodex(){
+  if(!secretsKnown()){
+    beep(180,0.08,'square',0.04);
+    const t=document.getElementById('tcont');
+    if(t&&mode==='title'){ t.textContent='the Book is sealed - find the card SECRETS OF THE GAUNTLET in a run'; setTimeout(()=>{ if(t.textContent.startsWith('the Book')) refreshContinue(); },2500); }
+    return;
+  }
+  codexFrom = (mode==='select') ? 'select' : (mode==='play'&&paused) ? 'pause' : 'title';
+  buildCodex(); codexEl.className=''; if(codexFrom!=='pause') titleEl.className='hidden'; else pauseEl.className='hidden';
+  mode='codex'; codexEl.scrollTop=0;
+}
+function closeCodex(){ codexEl.className='hidden'; if(codexFrom==='select'){ mode='select'; selEl.className=''; } else if(codexFrom==='pause'){ mode='play'; pauseEl.className=''; } else showTitle(''); }
 function openSheet(){ sheetPage=(sheetPage+1)%5; mode='sheet'; titleEl.className='hidden'; drawSheet(); }
 function closeSheet(){ sheetPage=-1; showTitle(''); }
 /* ------------------------------------------------------------ title screen */
@@ -6690,16 +7300,47 @@ function buildSelect(){
       c.drawImage(HSPR[h.id].down[0],0,0,32,32);
       const nm=document.createElement('span'); nm.textContent=h.name;
       cell.appendChild(cv); cell.appendChild(nm);
-      cell.onclick=()=>{ if(chosenId===h.id) startGame(); else selectHero(h.id); };
+      cell.onclick=()=>{ if(mode==='p2join'){ if(chosen2===h.id) p2JoinConfirm(); else setCursor(2,h.id); return; } if(!twoP){ if(chosenId===h.id) startGame(); else selectHero(h.id); } else setCursor(1,h.id); };
+      cell.oncontextmenu=(ev)=>{ ev.preventDefault(); if(twoP) setCursor(2,h.id); };
       cells[h.id]=cell; col.appendChild(cell);
     });
     grid.appendChild(col);
   });
   selectHero(chosenId);
 }
+/* Two players choose at once: player one's green box (WASD, Space to confirm)
+   and player two's red box (arrows, Enter to confirm). They start apart, one
+   on the left column and one on the right. */
+let chosen2='skel', ready1=false, ready2=false;
+function paintSelect(){
+  for(const id in cells) cells[id].className='cell';
+  if(!twoP){ cells[chosenId].className='cell sel'; return; }
+  if(chosen1===chosen2){ cells[chosen1].className='cell sel both'; }
+  else { cells[chosen1].className='cell sel p1tag'+(ready1?' ready':''); cells[chosen2].className='cell sel p2'+(ready2?' ready':''); }
+}
+function setCursor(n,id){
+  if(twoP){ if(n===2){ if(ready2) return; chosen2=id; } else { if(ready1) return; chosen1=id; chosenId=id; } }
+  else chosenId=id;
+  paintSelect(); previewHero(id);
+}
+function moveCursor(n,dx,dy){
+  const cur = (twoP&&n===2) ? chosen2 : (twoP?chosen1:chosenId);
+  const idx=ROSTER.findIndex(h=>h.id===cur);
+  const col=(idx/5)|0, row=idx%5;
+  const nc=(col+dx+5)%5, nr=(row+dy+5)%5;
+  setCursor(n,ROSTER[nc*5+nr].id);
+}
+function confirmPick(n){
+  if(!twoP) return startGame();
+  if(n===1) ready1=true; else ready2=true;
+  paintSelect(); beep(880,0.06,'square',0.04);
+  if(ready1&&ready2) startGame();
+}
 function selectHero(id){
-  if(cells[chosenId]) cells[chosenId].className='cell';
-  chosenId=id; cells[id].className='cell sel';
+  chosenId=id; if(twoP) chosen1=id;
+  paintSelect(); previewHero(id);
+}
+function previewHero(id){
   const h=HERO[id];
   document.getElementById('pickName').textContent=h.name+'  -  '+groupOf(id).name;
   document.getElementById('pickStats').textContent=
@@ -6714,12 +7355,7 @@ function selectHero(id){
   document.getElementById('health').textContent=String(h.hp).padStart(4,'0');
   beep(700,0.03,'square',0.02);
 }
-function moveSelect(dx,dy){
-  const idx=ROSTER.findIndex(h=>h.id===chosenId);
-  const col=(idx/5)|0, row=idx%5;
-  const nc=(col+dx+5)%5, nr=(row+dy+5)%5;
-  selectHero(ROSTER[nc*5+nr].id);
-}
+function moveSelect(dx,dy){ moveCursor(1,dx,dy); }
 /* ==========================================================================
    THE FOUNTAIN SAVE
    Everything a run carries between floors goes into one record: who is in the
@@ -6745,16 +7381,22 @@ function storeAll(runs){ localStorage.setItem(SAVE_KEY,JSON.stringify({v:2,runs}
 function saveRun(){
   try{
     const rec={v:1, at:Date.now(), level, score, hi:Math.max(hi,score), runSeed, chosenId,
-      party:party.map(m=>({cls:m.cls,hp:m.hp,maxHp:m.maxHp,rate:m.rate,spd:m.spd,down:!!m.down,downT:m.downT||0})),
+      party:party.map(m=>({cls:m.cls,hp:m.hp,maxHp:m.maxHp,rate:m.rate,spd:m.spd,down:!!m.down,downT:m.downT||0,p2:!!m.p2})),
+      twoP, p1src, p2src,
       player:{cls:player.cls,hp:player.hp,maxHp:player.maxHp,gold:player.gold|0,keysSilver:player.keysSilver|0,keysRed:player.keysRed|0},
       xp, xpLevel, pendingCards, up, hotbar};
     let runs=loadAll().filter(r=>r.runSeed!==runSeed);
     runs.unshift(rec);
-    while(runs.length>SAVE_RUNS){                                   // drop the oldest that is not the deepest
-      let deepest=runs.reduce((a,b)=>b.level>a.level?b:a);
-      let victim=-1; for(let i=runs.length-1;i>=0;i--) if(runs[i]!==deepest){ victim=i; break; }
-      if(victim<0) break; runs.splice(victim,1);
-    }
+    const trim=(list)=>{                                            // drop the oldest that is not the deepest
+      while(list.length>SAVE_RUNS){
+        let deepest=list.reduce((a,b)=>b.level>a.level?b:a);
+        let victim=-1; for(let i=list.length-1;i>=0;i--) if(list[i]!==deepest){ victim=i; break; }
+        if(victim<0) break; list.splice(victim,1);
+      }
+      return list;
+    };
+    const solo=trim(runs.filter(r=>!r.twoP)), duo=trim(runs.filter(r=>r.twoP));
+    runs=solo.concat(duo).sort((a,b)=>(b.at||0)-(a.at||0));
     storeAll(runs);
     refreshContinue();
     return true;
@@ -6762,18 +7404,19 @@ function saveRun(){
 }
 function loadRec(i){ const runs=loadAll(); return runs[i||0]||null; }
 function continueRun(i){
-  const r=loadRec(i|0); if(!r) return false;
+  const r = (typeof i==='object'&&i) ? i : loadRec(i|0); if(!r) return false;
   selEl.className='hidden'; titleEl.className='hidden';
   cardsEl.className='hidden'; pauseEl.className='hidden'; shopEl.className='hidden'; gateEl.className='hidden';
   superEl.className='hidden'; fallenEl.className='hidden'; shop=null; paused=false; dead=false;
   mode='play'; level=r.level; runSeed=r.runSeed; chosenId=r.chosenId||r.party[0].cls;
   score=r.score|0; hi=Math.max(hi,r.hi|0);
-  party=r.party.map(m=>({cls:m.cls,hp:m.hp,maxHp:m.maxHp,rate:m.rate||1,spd:m.spd||1,down:!!m.down,downT:m.downT||0,super:false}));
+  party=r.party.map(m=>({cls:m.cls,hp:m.hp,maxHp:m.maxHp,rate:m.rate||1,spd:m.spd||1,down:!!m.down,downT:m.downT||0,super:false,p2:!!m.p2}));
+  twoP=!!r.twoP; if(twoP){ p1src=r.p1src||'wasd'; p2src=r.p2src||'arrows'; } refreshTwoP();
   player={cls:r.player.cls,hp:r.player.hp,maxHp:r.player.maxHp,gold:r.player.gold|0,keysSilver:r.player.keysSilver|0,keysRed:r.player.keysRed|0};
   allies=[]; prisoner=null; boss=null; grenades=[];
   xp=r.xp|0; xpLevel=r.xpLevel||1; pendingCards=r.pendingCards|0;
   up=Object.assign(freshUpgrades(),r.up||{}); up.taken=(r.up&&r.up.taken)||{};
-  hotbar=(r.hotbar||[]).slice(0,HOT_SLOTS); while(hotbar.length<HOT_SLOTS) hotbar.push(null);
+  hotbar=(r.hotbar||[]).slice(0,HOT_MAX); while(hotbar.length<hotSlots()) hotbar.push(null);
   hudHero=null; hudAlly=null; updateTray();
   newLevel(true);
   showMsg('THE WATERS GIVE YOU BACK','floor '+level+' - '+party.length+' in the company');
@@ -6785,30 +7428,49 @@ function ago(t){
 }
 function refreshContinue(){
   const runs=loadAll();
-  const t=document.getElementById('tcont'), list=document.getElementById('contList');
+  const t=document.getElementById('tcont'), list=document.getElementById('contList'), list2=document.getElementById('contList2');
   while(list.firstChild) list.removeChild(list.firstChild);
+  while(list2.firstChild) list2.removeChild(list2.firstChild);
   if(!runs.length){ if(t) t.textContent=''; return; }
   const r=runs[0], who=HERO[r.player.cls]?HERO[r.player.cls].name:r.player.cls;
-  const others=runs.slice(1).map(x=>'floor '+x.level).join(', ');
-  if(t) t.textContent='C  continue: floor '+r.level+', '+who+' with '+(r.party.length-1)+' followers'+(others?'   (also saved: '+others+')':'');
-  runs.forEach((x,i)=>{
-    const b=document.createElement('button'); b.className='cont';
-    const w=HERO[x.player.cls]?HERO[x.player.cls].name:x.player.cls;
-    b.textContent=(i===0?'▶ ':'')+'F'+x.level+' '+w.split(' ')[0].slice(0,9)+' +'+(x.party.length-1)+' · '+ago(x.at||0);
-    b.title='pick up this run at the start of floor '+x.level;
-    b.onclick=()=>continueRun(i);
-    list.appendChild(b);
-  });
+  const solo=runs.filter(x=>!x.twoP), duo=runs.filter(x=>x.twoP);
+  if(t) t.textContent='C  continue: floor '+r.level+', '+who+(r.twoP?' (two players)':' with '+(r.party.length-1)+' followers')+
+     (solo.length>1||duo.length? '   ('+solo.length+' solo, '+duo.length+' two-player saved)':'');
+  const fill=(el,arr,label)=>{
+    if(!arr.length) return;
+    const h=document.createElement('div'); h.className='conth'; h.textContent=label; el.appendChild(h);
+    arr.forEach(x=>{
+      const b=document.createElement('button'); b.className='cont'+(x.twoP?' duo':'');
+      const w=HERO[x.player.cls]?HERO[x.player.cls].name:x.player.cls;
+      const m2=x.twoP?x.party.find(m=>m.p2):null, w2=m2&&HERO[m2.cls]?HERO[m2.cls].name:'';
+      b.textContent=(x===runs[0]?'▶ ':'')+'F'+x.level+' '+w.split(' ')[0].slice(0,8)+(w2?' & '+w2.split(' ')[0].slice(0,8):' +'+(x.party.length-1))+' · '+ago(x.at||0);
+      b.title='pick up this run at the start of floor '+x.level;
+      b.onclick=()=>continueRun(x);
+      el.appendChild(b);
+    });
+  };
+  fill(list,solo,'SOLO'); fill(list2,duo,'TWO PLAYERS');
 }
 function padLabel(){ return p1src==='pad'?'PAD: PLAYER ONE' : p2src==='pad'?'PAD: PLAYER TWO' : p2src==='pad2'?'PAD 1 + PAD 2' : 'PAD: NOBODY'; }
 function refreshTwoP(){
   const tb=document.getElementById('twoBtn'), pb=document.getElementById('padBtn'), h=document.querySelector('#select h1');
   tb.textContent='2 PLAYERS: '+(twoP?'ON':'OFF'); tb.className=twoP?'on':'';
   pb.style.display=twoP?'':'none'; pb.textContent=padLabel();
-  h.textContent = !twoP ? 'CHOOSE YOUR CHAMPION' : pickStage===1 ? 'PLAYER ONE - CHOOSE YOUR CHAMPION' : 'PLAYER TWO - CHOOSE YOUR CHAMPION';
+  h.textContent = !twoP ? 'CHOOSE YOUR CHAMPION' : 'GREEN: WASD + SPACE    RED: ARROWS + ENTER';
 }
 document.getElementById('padSetupBtn').onclick=openPadSetup;
-document.getElementById('twoBtn').onclick=()=>{ twoP=!twoP; pickStage=1; chosen1=null; if(!twoP){ p1src='wasd'; p2src='arrows'; } refreshTwoP(); };
+const swallow=(fn)=>(ev)=>{ ev.stopPropagation(); fn(); };
+refreshInfoButtons();
+document.getElementById('infoBtn').onclick=swallow(openCodex);
+document.getElementById('infoBtn2').onclick=swallow(()=>{ if(!secretsKnown()){ beep(180,0.08,'square',0.04); return; } selEl.className='hidden'; openCodex(); });
+document.getElementById('sheetBtn').onclick=swallow(()=>{ sheetPage=-1; openSheet(); });
+document.getElementById('padTitleBtn').onclick=swallow(()=>{ titleEl.className='hidden'; openPadSetup(); if(mode!=='padsetup') titleEl.className=''; });
+document.getElementById('twoBtn').onclick=()=>{
+  twoP=!twoP; ready1=ready2=false;
+  if(twoP){ chosen1=ROSTER[0].id; chosen2=ROSTER[20].id; chosenId=chosen1; }     // left column and right column
+  else { p1src='wasd'; p2src='arrows'; }
+  refreshTwoP(); paintSelect(); previewHero(chosenId);
+};
 document.getElementById('padBtn').onclick=()=>{            // nobody -> player one -> player two -> both
   if(p1src==='wasd'&&p2src==='arrows'){ p1src='pad'; }
   else if(p1src==='pad'&&p2src==='arrows'){ p1src='wasd'; p2src='pad'; }
@@ -6817,13 +7479,9 @@ document.getElementById('padBtn').onclick=()=>{            // nobody -> player o
   refreshTwoP();
 };
 function startGame(){
-  if(twoP && pickStage===1){                          // player one has picked: player two's turn
-    chosen1=chosenId; pickStage=2; refreshTwoP();
-    showMsg('','');
-    return;
-  }
-  const second = twoP ? chosenId : null;
+  const second = twoP ? chosen2 : null;
   if(twoP) chosenId=chosen1||chosenId;
+  ready1=ready2=false;
   selEl.className='hidden';
   mode='play'; dead=false; level=1; player=null; party=[]; allies=[]; prisoner=null; boss=null;
   xp=0; xpLevel=1; pendingCards=0; grenades=[]; up=freshUpgrades();
@@ -6859,7 +7517,7 @@ fallenEl.onclick=resumeFromFall;
 function loop(){
   pollPad();                                     // the pad is read every frame, menus included
   if(frame%90===0 && bakedLost()){ restoreBaked(); if(mode==='play') showMsg('THE TORCHES RELIT','sprites restored'); }
-  if(mode==='select'||mode==='title'||mode==='sheet'||mode==='padsetup'){ requestAnimationFrame(loop); return; }
+  if(mode==='select'||mode==='title'||mode==='sheet'||mode==='padsetup'||mode==='codex'||mode==='p2join'){ requestAnimationFrame(loop); return; }
   if(!paused&&!dead&&mode==='play') update();   // the world waits behind the gate
   draw(); drawHUD();
   if(dead){ ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,VIEW,VIEW); }
