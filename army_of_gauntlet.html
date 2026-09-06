@@ -2,10 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Army of Gauntlet</title>
 <style>
   html,body{margin:0;padding:0;background:#000;color:#ccc;font-family:"Trebuchet MS",Verdana,sans-serif;
-            height:100%;overflow:hidden;}
+            height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;
+            -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+  /* ---- touch: a floating stick on the left of the floor, a fire ring on the right */
+  #tstick,#tfire{position:absolute;z-index:5;pointer-events:none;display:none;width:92px;height:92px;margin:-46px 0 0 -46px;
+        border-radius:50%;border:2px dotted rgba(240,192,32,.7);background:rgba(0,0,0,.22);box-shadow:0 0 0 2px rgba(0,0,0,.55)}
+  #tfire{border-color:rgba(232,60,40,.8)}
+  #tstick i,#tfire i{position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;
+        background:#f0c020;box-shadow:0 0 0 2px #000,0 0 0 4px rgba(240,192,32,.35)}
+  #tfire i{background:#e02a2a;box-shadow:0 0 0 2px #000,0 0 0 4px rgba(232,60,40,.35)}
+  #tbtns{display:none;justify-content:center;gap:5px;margin:2px 0 4px}
+  #tbtns button{width:46px;height:30px;border-radius:5px;border:1px solid #6a5a2a;background:#151018;color:#f0c020;
+        font:bold 9px "Courier New",monospace;letter-spacing:1px;box-shadow:0 2px 0 #000;padding:0}
+  #tbtns button:active{background:#3a2a10;transform:translateY(1px)}
+  body.touch #tbtns{display:flex}
+  body.touch #keys{font-size:9px}
+  .tonly{display:none}
+  body.touch .tonly{display:inline-block}
+  #codexClose{position:sticky;top:0;float:right;z-index:2;border:1px solid #6a5a8a;background:#1a1030;color:#e0d0ff;
+        font:bold 10px "Courier New",monospace;letter-spacing:1px;padding:5px 10px;border-radius:4px}
   /* the cabinet is authored at 580x444 and scaled up to fill whatever screen it lands on */
   body{display:flex;align-items:center;justify-content:center;}
   #wrap{position:relative;width:720px;margin:0;background:#000;border-radius:6px;
@@ -394,6 +413,7 @@
 <body>
 <div id="wrap">
   <canvas id="game" width="560" height="560"></canvas>
+  <div id="tstick"><i></i></div><div id="tfire"><i></i></div>
   <div id="side">
     <div id="logo">ARMY OF<br><span>GAUNTLET</span></div>
     <div id="lvlname">Dungeon One</div>
@@ -430,6 +450,7 @@
       <div class="sub" id="p2Sub">Tab or click: take another follower</div>
       <canvas id="p2company" width="148" height="46"></canvas>
     </div>
+    <div id="tbtns"><button id="tPause">PAUSE</button><button id="tPotion">POTION</button><button id="tHeal">HEAL</button></div>
     <div id="keys">arrows / WASD &nbsp;move &amp; aim<br>space&nbsp;fire &nbsp; B&nbsp;potion &nbsp; H&nbsp;heal &nbsp; X&nbsp;white &nbsp; P&nbsp;pause<br>Enter&nbsp;player two joins on a follower &nbsp; Backspace&nbsp;leaves<br>click a follower here or on the floor to lead them</div>
   </div>
   <div id="msg"><span id="msgMain"></span><small id="msgSub"></small></div>
@@ -447,7 +468,7 @@
     <h2>THE TRAVELLING MERCHANT</h2>
     <div id="shopPurse">purse <b id="shopGold">0</b> gold &nbsp;-&nbsp; every card <b id="shopPrice">10</b></div>
     <div id="shopRow"></div>
-    <div id="shopHint">click to buy &nbsp;-&nbsp; ESC to leave</div>
+    <div id="shopHint">click to buy &nbsp;-&nbsp; ESC to leave <button id="shopLeave" class="tonly" style="margin-left:8px;padding:4px 10px;font:bold 10px 'Courier New',monospace;background:#1a1030;color:#e0d0ff;border:1px solid #6a5a8a;border-radius:4px">LEAVE</button></div>
   </div>
   <div id="hotbar"></div>
   <div id="tip" class="hidden"></div>
@@ -487,7 +508,7 @@
     <div id="pauseHint">ESC or P to resume &nbsp;-&nbsp; Q to quit</div>
   </div>
   <div id="padTag">GAMEPAD: press any button</div>
-  <div id="codex" class="hidden"><div id="codexBody"></div></div>
+  <div id="codex" class="hidden"><button id="codexClose" class="tonly">CLOSE</button><div id="codexBody"></div></div>
   <div id="padSetup" class="hidden">
     <h2>GAMEPAD SETUP</h2>
     <div id="padWhich"></div>
@@ -3837,6 +3858,11 @@ function inputFor(n){
   if(src==='all'||src==='arrows') kb('arrowleft','arrowright','arrowup','arrowdown', src==='all'?[' ']:['enter','control']);
   const pd = (src==='all'||src==='pad') ? pad : (src==='pad2' ? pad2 : null);
   if(pd){ if(pd.x) dx=pd.x; if(pd.y) dy=pd.y; if(pd.fire) fire=true; if(pd.aim) aim=pd.aim; }
+  if(touch.on && (src==='all'||src==='wasd')){                // a finger on the floor drives player one
+    if(touch.x) dx=touch.x; if(touch.y) dy=touch.y;
+    if(touch.fire||frame<touch.fireUntil) fire=true;
+    if(touch.aim) aim=touch.aim;
+  }
   return {dx,dy,fire,aim};
 }
 function keepInView(e){                            // the tether: nobody walks off the screen
@@ -6264,15 +6290,99 @@ function switchLeader(a){
   showMsg(HERO[m.cls].name.toUpperCase()+' TAKES THE LEAD', HERO[old.cls].name+' falls in behind');
   beep(520,0.08,'square',0.05); beep(780,0.12,'sine',0.05);
 }
-cv.addEventListener('mousedown',ev=>{
-  if(mode!=='play'||!player) return;
+function pickOnFloor(clientX,clientY){
+  if(mode!=='play'||!player) return false;
   const r=cv.getBoundingClientRect();
-  const sx=(ev.clientX-r.left)*(cv.width/r.width), sy=(ev.clientY-r.top)*(cv.height/r.height);
+  const sx=(clientX-r.left)*(cv.width/r.width), sy=(clientY-r.top)*(cv.height/r.height);
   const wx=sx/ZOOM+camX, wy=sy/ZOOM+camY;           // screen to world
   let best=null, bd=18;
   for(const a of allies){ const d=Math.hypot(a.x-wx,a.y-wy); if(d<bd){ bd=d; best=a; } }
-  if(best){ switchLeader(best); ev.preventDefault(); }
+  if(best){ switchLeader(best); return true; }
+  return false;
+}
+cv.addEventListener('mousedown',ev=>{ if(pickOnFloor(ev.clientX,ev.clientY)) ev.preventDefault(); });
+
+/* ==========================================================================
+   TOUCH (iPad and phones)
+   The left half of the floor is a floating stick: put a finger down and drag,
+   the ring appears under it. The right half is the fire ring: a tap fires
+   where the hero faces, a drag aims eight ways and keeps firing, like the
+   right stick of a pad. A quick tap on a follower still hands them the lead.
+   Menus already answer to taps; the sidebar gains PAUSE / POTION / HEAL.
+   ========================================================================== */
+const touch={on:false,x:0,y:0,fire:false,aim:null,fireUntil:0};
+const TOUCH_DEV = (navigator.maxTouchPoints>0 && matchMedia('(pointer:coarse)').matches) || /[?&]touch=1/.test(location.search);
+const tStickEl=document.getElementById('tstick'), tFireEl=document.getElementById('tfire');
+let tMove=null, tFire=null;
+const T_DEAD=12, T_FULL=40;
+function wrapPt(ev){ const r=wrapEl.getBoundingClientRect(), s=r.width/(wrapEl.offsetWidth||1); return {x:(ev.clientX-r.left)/s, y:(ev.clientY-r.top)/s}; }
+function tPlace(el,x,y){ el.style.left=x+'px'; el.style.top=y+'px'; }
+function tKnob(el,dx,dy){ el.firstElementChild.style.transform='translate('+dx+'px,'+dy+'px)'; }
+function tVec(t,p){ const dx=p.x-t.x, dy=p.y-t.y, d=Math.hypot(dx,dy); return {dx,dy,d,ux:d?dx/d:0,uy:d?dy/d:0}; }
+function wakeAudio(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume().catch(()=>{}); }catch(e){} }
+cv.addEventListener('touchstart',ev=>ev.preventDefault(),{passive:false});   // no ghost mouse events, no scrolling
+cv.addEventListener('pointerdown',ev=>{
+  if(ev.pointerType==='mouse') return;
+  ev.preventDefault(); wakeAudio();
+  if(mode==='sheet'){ closeSheet(); return; }
+  if(mode!=='play'||!player||paused) return;
+  const p=wrapPt(ev); touch.on=true;
+  try{ cv.setPointerCapture(ev.pointerId); }catch(e){}
+  if(p.x<280){
+    if(tMove) return;
+    tMove={id:ev.pointerId,x:p.x,y:p.y,t:performance.now(),moved:false};
+    tPlace(tStickEl,p.x,p.y); tKnob(tStickEl,0,0); tStickEl.style.display='block';
+  } else {
+    if(tFire) return;
+    tFire={id:ev.pointerId,x:p.x,y:p.y,t:performance.now(),moved:false};
+    tPlace(tFireEl,p.x,p.y); tKnob(tFireEl,0,0); tFireEl.style.display='block';
+    touch.fire=true; touch.fireUntil=frame+6;
+  }
 });
+cv.addEventListener('pointermove',ev=>{
+  if(ev.pointerType==='mouse') return;
+  const p=wrapPt(ev);
+  if(tMove&&ev.pointerId===tMove.id){
+    let v=tVec(tMove,p);
+    if(v.d>T_FULL*1.5){ tMove.x=p.x-v.ux*T_FULL*1.5; tMove.y=p.y-v.uy*T_FULL*1.5; tPlace(tStickEl,tMove.x,tMove.y); v=tVec(tMove,p); }  // the ring follows a far finger
+    if(v.d>8) tMove.moved=true;
+    const k=Math.min(v.d,T_FULL); tKnob(tStickEl,v.ux*k,v.uy*k);
+    if(v.d<T_DEAD){ touch.x=0; touch.y=0; }
+    else { touch.x = Math.abs(v.ux)>0.38 ? Math.sign(v.ux) : 0; touch.y = Math.abs(v.uy)>0.38 ? Math.sign(v.uy) : 0; }
+  }
+  if(tFire&&ev.pointerId===tFire.id){
+    const v=tVec(tFire,p);
+    if(v.d>8) tFire.moved=true;
+    const k=Math.min(v.d,T_FULL); tKnob(tFireEl,v.ux*k,v.uy*k);
+    touch.aim = v.d>=T_DEAD ? dirFromVec(v.dx,v.dy) : null;
+    touch.fire=true;
+  }
+});
+function tEnd(ev){
+  if(ev.pointerType==='mouse') return;
+  if(tMove&&ev.pointerId===tMove.id){
+    const tap=!tMove.moved && performance.now()-tMove.t<300;
+    tMove=null; touch.x=0; touch.y=0; tStickEl.style.display='none';
+    if(tap) pickOnFloor(ev.clientX,ev.clientY);
+  }
+  if(tFire&&ev.pointerId===tFire.id){
+    const tap=!tFire.moved && performance.now()-tFire.t<300;
+    tFire=null; touch.aim=null; touch.fire=false; tFireEl.style.display='none';
+    if(tap && pickOnFloor(ev.clientX,ev.clientY)) touch.fireUntil=0;
+  }
+}
+cv.addEventListener('pointerup',tEnd); cv.addEventListener('pointercancel',tEnd);
+addEventListener('blur',()=>{ tMove=tFire=null; touch.x=touch.y=0; touch.fire=false; touch.aim=null; tStickEl.style.display='none'; tFireEl.style.display='none'; });
+document.getElementById('tPause').onclick=()=>{ wakeAudio(); if(mode==='play') handleKey(paused?'enter':'p'); };
+document.getElementById('tPotion').onclick=()=>{ if(mode==='play'&&!paused) handleKey('b'); };
+document.getElementById('tHeal').onclick=()=>{ if(mode==='play'&&!paused) handleKey('g'); };
+document.getElementById('shopLeave').onclick=()=>{ if(mode==='shop') closeShop(); };
+document.getElementById('codexClose').onclick=()=>{ if(mode==='codex') closeCodex(); };
+if(TOUCH_DEV){
+  document.body.classList.add('touch');
+  document.getElementById('keys').innerHTML='left of the floor: drag to move<br>right of the floor: tap fires, drag aims &amp; fires<br>tap a follower here or on the floor to lead them';
+  addEventListener('pointerdown',wakeAudio,{capture:true});
+}
 ctx.imageSmoothingEnabled=false;
 const lctx=document.getElementById('lives').getContext('2d');
 const elScore=document.getElementById('score'), elHealth=document.getElementById('health'),
@@ -7538,6 +7648,8 @@ function fitScreen(){
   wrapEl.style.transform='scale('+s+')';
 }
 addEventListener('resize',fitScreen);
+addEventListener('orientationchange',()=>setTimeout(fitScreen,120));
+if(window.visualViewport) visualViewport.addEventListener('resize',fitScreen);
 
 function drawCarryIcons(){
   for(const [id,spr] of [['coinIco',SPR.coin],['keyIco',SPR.key],
