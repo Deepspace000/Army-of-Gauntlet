@@ -9,7 +9,7 @@
             height:100%;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;
             -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
   /* ---- touch: a floating stick on the left of the floor, a fire ring on the right */
-  #tstick,#tfire{position:absolute;z-index:5;pointer-events:none;display:none;width:92px;height:92px;margin:-46px 0 0 -46px;
+  #tstick,#tfire{position:fixed;z-index:5;pointer-events:none;display:none;width:92px;height:92px;margin:-46px 0 0 -46px;
         border-radius:50%;border:2px dotted rgba(240,192,32,.7);background:rgba(0,0,0,.22);box-shadow:0 0 0 2px rgba(0,0,0,.55)}
   #tfire{border-color:rgba(232,60,40,.8)}
   #tstick i,#tfire i{position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;
@@ -22,6 +22,33 @@
   body.touch #tbtns{display:flex}
   body.touch #keys{font-size:9px}
   .tonly{display:none}
+  /* ---- phones: a control strip under the cabinet, a stick pad left and a fire pad right */
+  #ctlbar{display:none;position:fixed;left:0;right:0;bottom:0;height:176px;z-index:6;box-sizing:border-box;
+        padding:6px 18px calc(6px + env(safe-area-inset-bottom));align-items:center;justify-content:space-between;
+        background:#07050a;border-top:2px solid #1a1a1a}
+  body.phone{display:block}
+  body.phone #ctlbar{display:flex}
+  .pad{position:relative;width:124px;height:124px;border-radius:50%;border:2px dotted rgba(240,192,32,.7);
+       background:radial-gradient(circle,rgba(40,32,20,.9) 0,rgba(14,10,18,.95) 70%);box-shadow:0 0 0 2px rgba(0,0,0,.55),0 3px 0 #000;
+       touch-action:none}
+  .pad.move{background-image:linear-gradient(rgba(240,192,32,.18),rgba(240,192,32,.18)),linear-gradient(90deg,rgba(240,192,32,.18),rgba(240,192,32,.18)),
+       radial-gradient(circle,rgba(40,32,20,.9) 0,rgba(14,10,18,.95) 70%);background-size:2px 100%,100% 2px,100% 100%;
+       background-position:center,center,center;background-repeat:no-repeat}
+  .pad.fire{border-color:rgba(232,60,40,.8)}
+  .pad i{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+       background:#f0c020;box-shadow:0 0 0 2px #000,0 0 0 4px rgba(240,192,32,.35)}
+  .pad.fire i{background:#e02a2a;box-shadow:0 0 0 2px #000,0 0 0 4px rgba(232,60,40,.35)}
+  .pad.held{border-style:solid}
+  #ctlbar .mid{display:flex;flex-direction:column;gap:6px}
+  #ctlbar .mid button{width:72px;height:34px;border-radius:5px;border:1px solid #6a5a2a;background:#151018;color:#f0c020;
+       font:bold 11px "Courier New",monospace;letter-spacing:1px;box-shadow:0 2px 0 #000;padding:0}
+  #ctlbar .mid button:active{background:#3a2a10;transform:translateY(1px)}
+  @media (orientation:landscape){
+    #ctlbar{height:104px;padding:4px 18px calc(4px + env(safe-area-inset-bottom))}
+    .pad{width:88px;height:88px}
+    .pad i{width:34px;height:34px;margin:-17px 0 0 -17px}
+    #ctlbar .mid{flex-direction:row}
+  }
   body.touch .tonly{display:inline-block}
   #codexClose{position:sticky;top:0;float:right;z-index:2;border:1px solid #6a5a8a;background:#1a1030;color:#e0d0ff;
         font:bold 10px "Courier New",monospace;letter-spacing:1px;padding:5px 10px;border-radius:4px}
@@ -545,6 +572,11 @@
     <div id="contWrap"><div id="contList2"></div><div id="contList"></div></div>
   </div>
 </div>
+<div id="ctlbar">
+  <div class="pad move" data-pad="move"><i></i></div>
+  <div class="mid"><button id="cPause">PAUSE</button><button id="cPotion">POTION</button><button id="cHeal">HEAL</button></div>
+  <div class="pad fire" data-pad="fire"><i></i></div>
+</div>
 
 <script>
 /* ============================================================================
@@ -575,12 +607,12 @@ function areaScale(){ return Math.max(0.3,Math.min(3,(MAP_W*MAP_H)/(41*41))); }
 const VIEW = 560;                          /* canvas is 560x560 and scrolls */
 const ZOOM = 2;                            /* fourteen tiles across, cleanly */
 /* movement tuning: base pace scaled to 45%, monsters run at 90% of the elf */
-const SPEED_SCALE = 0.45;
+const SPEED_SCALE = 0.54;                        // 0.45 raised 20%: the whole game runs a fifth quicker from floor one
 const PLAYER_SPEED = 1.7 * SPEED_SCALE;
 const ENEMY_PACE   = 0.42;                        // every monster and lord at 42% of the original pace (60%, then another 30% off)
 const ENEMY_SPEED  = PLAYER_SPEED * 0.9 * ENEMY_PACE;
-const ENEMY_ANIM   = Math.round(9/ENEMY_PACE);        // frames per animation step (was 9)
-const ENEMY_STRIDE = Math.round(8/ENEMY_PACE);        // walk ticks per stride frame (was 8)
+const ENEMY_ANIM   = Math.round(9/ENEMY_PACE/1.2);    // frames per animation step (was 9), keeping step with the 20% quicker walk
+const ENEMY_STRIDE = Math.round(8/ENEMY_PACE/1.2);    // walk ticks per stride frame (was 8)
 const SHOT_SPEED   = 5.2 * SPEED_SCALE;
 const ELIXIR_MAX   = 5;        /* health draughts you can carry at once */
 const HEAL_MAX     = 3;        /* golden draughts you can carry at once */
@@ -2593,7 +2625,7 @@ DIRS8.forEach(d=>{ SPR.shot8[d[0]] = rot(SPR.shot, Math.atan2(d[2],d[1])); });
 DIRS8.forEach(d=>{ SPR.spear8[d[0]] = rot(SPR.spearShot, Math.atan2(d[2],d[1])); });   // goblin spears
 
 /* ============================================================ level building */
-let map, staticCv, level=1, rngState=12345;
+let map, staticCv, wallCv, level=1, rngState=12345;
 function rnd(){ rngState=(rngState*1103515245+12345)&0x7fffffff; return rngState/0x7fffffff; }
 function ri(n){ return (rnd()*n)|0; }
 
@@ -3109,6 +3141,21 @@ function prerender(){
     if(escapeAll) c.drawImage(SPR.exit,x*TILE,y*TILE); else drawWall(c,x,y);
   }
   placeTorches(c);
+  /* The blocks stand taller than anyone walking past them, so their tops are
+     drawn again OVER the sprites each frame: a hero hugging the south side of
+     a wall shows in front of its face, never on top of its crest. Only the
+     front faces (the bottom rows of a tile with open floor below) are left
+     out of this layer. Sunken water has no top to hide behind. */
+  wallCv=null;
+  if(!escapeAll && theme.kind!=='water'){
+    wallCv=document.createElement('canvas'); wallCv.width=VW; wallCv.height=VH;
+    const w=wallCv.getContext('2d');
+    for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
+      if(map[y][x]!==1) continue;
+      drawWall(w,x,y);
+      if(!isWall(x,y+1)) w.clearRect(x*TILE,y*TILE+TILE-1-FACE_H,TILE,FACE_H+1);
+    }
+  }
 }
 /* ---- the live layers: torch flames, polish, darkness and mist ---- */
 function drawTorchFlames(){
@@ -5097,7 +5144,7 @@ function drawSwing(who){
    arrows knock it out of the air and a sword sweep bats it away, so a corridor
    full of fire can be cleared rather than only dodged.
    ========================================================================== */
-const ESHOT_SPEED=2.1;
+const ESHOT_SPEED=2.1*1.2;                        // monster missiles keep pace with the 20% quicker game
 /* what monsters throw: speed, share of their bite, life, radius, arrows to break, sound */
 const PROJ={
   bolt:    {spd:2.1,  share:0.5,  life:150, r:5, hp:1, tone:180},
@@ -6304,85 +6351,109 @@ cv.addEventListener('mousedown',ev=>{ if(pickOnFloor(ev.clientX,ev.clientY)) ev.
 
 /* ==========================================================================
    TOUCH (iPad and phones)
-   The left half of the floor is a floating stick: put a finger down and drag,
-   the ring appears under it. The right half is the fire ring: a tap fires
-   where the hero faces, a drag aims eight ways and keeps firing, like the
-   right stick of a pad. A quick tap on a follower still hands them the lead.
-   Menus already answer to taps; the sidebar gains PAUSE / POTION / HEAL.
+   The whole screen is the controller. The first finger down anywhere that is
+   not a button becomes a floating stick: the ring appears under it and drag
+   moves. A second finger is the fire ring: a tap fires where the hero faces,
+   a drag aims eight ways and keeps firing, like the right stick of a pad. A
+   quick tap on a follower hands them the lead; a quick tap anywhere else
+   fires a burst. Phones also get a strip under the cabinet with a fixed stick
+   pad, a fire pad and PAUSE / POTION / HEAL; the sidebar keeps its buttons.
    ========================================================================== */
 const touch={on:false,x:0,y:0,fire:false,aim:null,fireUntil:0};
-const TOUCH_DEV = (navigator.maxTouchPoints>0 && matchMedia('(pointer:coarse)').matches) || /[?&]touch=1/.test(location.search);
+const TOUCH_DEV = (navigator.maxTouchPoints>0 && matchMedia('(pointer:coarse)').matches) || /[?&](touch|phone)=1/.test(location.search);
+const PHONE = (TOUCH_DEV && Math.min(screen.width,screen.height)<600) || /[?&]phone=1/.test(location.search);
 const tStickEl=document.getElementById('tstick'), tFireEl=document.getElementById('tfire');
+document.body.appendChild(tStickEl); document.body.appendChild(tFireEl);   // fixed to the screen, not to the scaled cabinet
 let tMove=null, tFire=null;
 const T_DEAD=12, T_FULL=40;
-function wrapPt(ev){ const r=wrapEl.getBoundingClientRect(), s=r.width/(wrapEl.offsetWidth||1); return {x:(ev.clientX-r.left)/s, y:(ev.clientY-r.top)/s}; }
 function tPlace(el,x,y){ el.style.left=x+'px'; el.style.top=y+'px'; }
 function tKnob(el,dx,dy){ el.firstElementChild.style.transform='translate('+dx+'px,'+dy+'px)'; }
 function tVec(t,p){ const dx=p.x-t.x, dy=p.y-t.y, d=Math.hypot(dx,dy); return {dx,dy,d,ux:d?dx/d:0,uy:d?dy/d:0}; }
 function wakeAudio(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume().catch(()=>{}); }catch(e){} }
-cv.addEventListener('touchstart',ev=>ev.preventDefault(),{passive:false});   // no ghost mouse events, no scrolling
-cv.addEventListener('pointerdown',ev=>{
+/* what a touch is for: false = a button or list the page handles itself,
+   'move' / 'fire' = a pad in the strip, true = the open screen */
+function tWhat(ev){
+  for(let n=ev.target;n&&n!==document.body;n=n.parentElement){
+    if(n.dataset&&n.dataset.pad) return n.dataset.pad;
+    if(n.tagName==='BUTTON'||n.tagName==='A'||n.tagName==='INPUT'||n.tagName==='SELECT'||n.onclick||n===compCv||n===p2Cv||n.id==='tray') return false;
+  }
+  return true;
+}
+function tMoveFrom(p){
+  let v=tVec(tMove,p);
+  if(!tMove.fixed && v.d>T_FULL*1.5){ tMove.x=p.x-v.ux*T_FULL*1.5; tMove.y=p.y-v.uy*T_FULL*1.5; tPlace(tStickEl,tMove.x,tMove.y); v=tVec(tMove,p); }  // the ring follows a far finger
+  if(v.d>8) tMove.moved=true;
+  const k=Math.min(v.d,T_FULL); tKnob(tMove.fixed||tStickEl,v.ux*k,v.uy*k);
+  if(v.d<T_DEAD){ touch.x=0; touch.y=0; }
+  else { touch.x = Math.abs(v.ux)>0.38 ? Math.sign(v.ux) : 0; touch.y = Math.abs(v.uy)>0.38 ? Math.sign(v.uy) : 0; }
+}
+function tFireFrom(p){
+  const v=tVec(tFire,p);
+  if(v.d>8) tFire.moved=true;
+  const k=Math.min(v.d,T_FULL); tKnob(tFire.fixed||tFireEl,v.ux*k,v.uy*k);
+  touch.aim = v.d>=T_DEAD ? dirFromVec(v.dx,v.dy) : null;
+  touch.fire=true;
+}
+document.addEventListener('touchstart',ev=>{ if(mode==='play'&&!paused&&tWhat(ev)!==false) ev.preventDefault(); },{passive:false});   // no ghost mouse events, no scrolling
+document.addEventListener('touchmove',ev=>{ if(mode==='play') ev.preventDefault(); },{passive:false});
+document.addEventListener('pointerdown',ev=>{
   if(ev.pointerType==='mouse') return;
-  ev.preventDefault(); wakeAudio();
-  if(mode==='sheet'){ closeSheet(); return; }
-  if(mode!=='play'||!player||paused) return;
-  const p=wrapPt(ev); touch.on=true;
-  try{ cv.setPointerCapture(ev.pointerId); }catch(e){}
-  if(p.x<280){
-    if(tMove) return;
+  wakeAudio();
+  const what=tWhat(ev);
+  if(mode==='sheet'){ if(what===true){ ev.preventDefault(); closeSheet(); } return; }
+  if(mode!=='play'||!player||paused||what===false) return;
+  ev.preventDefault(); touch.on=true;
+  const p={x:ev.clientX,y:ev.clientY};
+  if(what==='move'||what==='fire'){                          // a pad in the strip: anchored at its centre, the ring stays put
+    const el=ev.target.closest('[data-pad]'), r=el.getBoundingClientRect(), c={x:r.left+r.width/2,y:r.top+r.height/2};
+    if(what==='move'){ if(tMove) return; tMove={id:ev.pointerId,x:c.x,y:c.y,t:performance.now(),moved:true,fixed:el}; tMoveFrom(p); }
+    else { if(tFire) return; tFire={id:ev.pointerId,x:c.x,y:c.y,t:performance.now(),moved:false,fixed:el}; touch.fire=true; touch.fireUntil=frame+6; tFireFrom(p); }
+    el.classList.add('held'); return;
+  }
+  if(!tMove){
     tMove={id:ev.pointerId,x:p.x,y:p.y,t:performance.now(),moved:false};
     tPlace(tStickEl,p.x,p.y); tKnob(tStickEl,0,0); tStickEl.style.display='block';
-  } else {
-    if(tFire) return;
+  } else if(!tFire){
     tFire={id:ev.pointerId,x:p.x,y:p.y,t:performance.now(),moved:false};
     tPlace(tFireEl,p.x,p.y); tKnob(tFireEl,0,0); tFireEl.style.display='block';
     touch.fire=true; touch.fireUntil=frame+6;
   }
 });
-cv.addEventListener('pointermove',ev=>{
+document.addEventListener('pointermove',ev=>{
   if(ev.pointerType==='mouse') return;
-  const p=wrapPt(ev);
-  if(tMove&&ev.pointerId===tMove.id){
-    let v=tVec(tMove,p);
-    if(v.d>T_FULL*1.5){ tMove.x=p.x-v.ux*T_FULL*1.5; tMove.y=p.y-v.uy*T_FULL*1.5; tPlace(tStickEl,tMove.x,tMove.y); v=tVec(tMove,p); }  // the ring follows a far finger
-    if(v.d>8) tMove.moved=true;
-    const k=Math.min(v.d,T_FULL); tKnob(tStickEl,v.ux*k,v.uy*k);
-    if(v.d<T_DEAD){ touch.x=0; touch.y=0; }
-    else { touch.x = Math.abs(v.ux)>0.38 ? Math.sign(v.ux) : 0; touch.y = Math.abs(v.uy)>0.38 ? Math.sign(v.uy) : 0; }
-  }
-  if(tFire&&ev.pointerId===tFire.id){
-    const v=tVec(tFire,p);
-    if(v.d>8) tFire.moved=true;
-    const k=Math.min(v.d,T_FULL); tKnob(tFireEl,v.ux*k,v.uy*k);
-    touch.aim = v.d>=T_DEAD ? dirFromVec(v.dx,v.dy) : null;
-    touch.fire=true;
-  }
+  const p={x:ev.clientX,y:ev.clientY};
+  if(tMove&&ev.pointerId===tMove.id) tMoveFrom(p);
+  if(tFire&&ev.pointerId===tFire.id) tFireFrom(p);
 });
 function tEnd(ev){
   if(ev.pointerType==='mouse') return;
   if(tMove&&ev.pointerId===tMove.id){
-    const tap=!tMove.moved && performance.now()-tMove.t<300;
+    const tap=!tMove.moved && performance.now()-tMove.t<300, fixed=tMove.fixed;
     tMove=null; touch.x=0; touch.y=0; tStickEl.style.display='none';
-    if(tap) pickOnFloor(ev.clientX,ev.clientY);
+    if(fixed){ fixed.classList.remove('held'); tKnob(fixed,0,0); }
+    else if(tap && !pickOnFloor(ev.clientX,ev.clientY)) touch.fireUntil=frame+6;   // a tap on the open floor: one burst ahead
   }
   if(tFire&&ev.pointerId===tFire.id){
-    const tap=!tFire.moved && performance.now()-tFire.t<300;
+    const tap=!tFire.moved && performance.now()-tFire.t<300, fixed=tFire.fixed;
     tFire=null; touch.aim=null; touch.fire=false; tFireEl.style.display='none';
-    if(tap && pickOnFloor(ev.clientX,ev.clientY)) touch.fireUntil=0;
+    if(fixed){ fixed.classList.remove('held'); tKnob(fixed,0,0); }
+    else if(tap && pickOnFloor(ev.clientX,ev.clientY)) touch.fireUntil=0;
   }
 }
-cv.addEventListener('pointerup',tEnd); cv.addEventListener('pointercancel',tEnd);
-addEventListener('blur',()=>{ tMove=tFire=null; touch.x=touch.y=0; touch.fire=false; touch.aim=null; tStickEl.style.display='none'; tFireEl.style.display='none'; });
-document.getElementById('tPause').onclick=()=>{ wakeAudio(); if(mode==='play') handleKey(paused?'enter':'p'); };
-document.getElementById('tPotion').onclick=()=>{ if(mode==='play'&&!paused) handleKey('b'); };
-document.getElementById('tHeal').onclick=()=>{ if(mode==='play'&&!paused) handleKey('g'); };
+document.addEventListener('pointerup',tEnd); document.addEventListener('pointercancel',tEnd);
+addEventListener('blur',()=>{ tMove=tFire=null; touch.x=touch.y=0; touch.fire=false; touch.aim=null; tStickEl.style.display='none'; tFireEl.style.display='none';
+  for(const el of document.querySelectorAll('.pad.held')){ el.classList.remove('held'); tKnob(el,0,0); } });
+for(const id of ['tPause','cPause']) document.getElementById(id).onclick=()=>{ wakeAudio(); if(mode==='play') handleKey(paused?'enter':'p'); };
+for(const id of ['tPotion','cPotion']) document.getElementById(id).onclick=()=>{ if(mode==='play'&&!paused) handleKey('b'); };
+for(const id of ['tHeal','cHeal']) document.getElementById(id).onclick=()=>{ if(mode==='play'&&!paused) handleKey('g'); };
 document.getElementById('shopLeave').onclick=()=>{ if(mode==='shop') closeShop(); };
 document.getElementById('codexClose').onclick=()=>{ if(mode==='codex') closeCodex(); };
 if(TOUCH_DEV){
   document.body.classList.add('touch');
-  document.getElementById('keys').innerHTML='left of the floor: drag to move<br>right of the floor: tap fires, drag aims &amp; fires<br>tap a follower here or on the floor to lead them';
+  document.getElementById('keys').innerHTML='anywhere on the screen: first finger drags to move<br>second finger: tap fires, drag aims &amp; fires<br>tap a follower here or on the floor to lead them';
   addEventListener('pointerdown',wakeAudio,{capture:true});
 }
+if(PHONE) document.body.classList.add('phone');
 ctx.imageSmoothingEnabled=false;
 const lctx=document.getElementById('lives').getContext('2d');
 const elScore=document.getElementById('score'), elHealth=document.getElementById('health'),
@@ -6780,6 +6851,7 @@ function draw(){
     ctx.fillRect(p.x|0,p.y|0,sz,sz);
   }
   ctx.globalAlpha=1;
+  if(wallCv) ctx.drawImage(wallCv,0,0);          // the tops of the blocks stand in front of everyone
 
   ctx.setTransform(1,0,0,1,0,0);                 // back to screen space
   if(whiteFlashT>0){ ctx.fillStyle='rgba(255,255,255,'+(whiteFlashT--/18*0.8).toFixed(2)+')'; ctx.fillRect(0,0,VIEW,VIEW); }
@@ -7643,9 +7715,14 @@ function loop(){
 const wrapEl=document.getElementById('wrap');
 function fitScreen(){
   const w=wrapEl.offsetWidth||580, h=wrapEl.offsetHeight||444;
-  let s=Math.min(window.innerWidth/(w+16), window.innerHeight/(h+16));
-  s=Math.max(0.5,Math.floor(s*20)/20);          // snap to 5% steps so pixels stay even
-  wrapEl.style.transform='scale('+s+')';
+  const bar=document.body.classList.contains('phone') ? (document.getElementById('ctlbar').offsetHeight||0) : 0;   // the strip under the cabinet
+  let s=Math.min(window.innerWidth/(w+16), (window.innerHeight-bar)/(h+16));
+  s=Math.max(bar?0.35:0.5,Math.floor(s*20)/20);   // snap to 5% steps so pixels stay even
+  if(bar){                                        // the cabinet sits centred in whatever is left above the strip
+    wrapEl.style.position='absolute'; wrapEl.style.left='50%'; wrapEl.style.transformOrigin='top center';
+    wrapEl.style.top=Math.max(0,(window.innerHeight-bar-h*s)/2)+'px';
+    wrapEl.style.transform='translateX(-50%) scale('+s+')';
+  } else wrapEl.style.transform='scale('+s+')';
 }
 addEventListener('resize',fitScreen);
 addEventListener('orientationchange',()=>setTimeout(fitScreen,120));
